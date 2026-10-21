@@ -1,0 +1,302 @@
+diff --git a/crates/pumpkin/src/command/commands/function.rs b/crates/pumpkin/src/command/commands/function.rs
+index bbd7049..e1c9613 100644
+--- a/crates/pumpkin/src/command/commands/function.rs
++++ b/crates/pumpkin/src/command/commands/function.rs
+@@ -6,11 +6,12 @@ use pumpkin_util::text::TextComponent;
+ use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+ use crate::command::argument_types::core::string::StringArgumentType;
+ use crate::command::context::command_context::CommandContext;
+-use crate::command::errors::error_types::CommandErrorType;
++use crate::command::errors::error_types::{CommandErrorType, LiteralCommandErrorType};
+ use crate::command::node::dispatcher::CommandDispatcher;
+ use crate::command::node::{CommandExecutor, CommandExecutorResult};
+ use crate::command::suggestion::provider::{SuggestionProvider, SuggestionProviderResult};
+ use crate::command::suggestion::suggestions::SuggestionsBuilder;
++use crate::data::datapack::function_chain;
+ 
+ const DESCRIPTION: &str = "Runs commands found in the corresponding function files.";
+ const PERMISSION: &str = "minecraft:command.function";
+@@ -20,6 +21,34 @@ static ERROR_UNKNOWN_FUNCTION: CommandErrorType<1> = CommandErrorType::new(
+     translation::java::ARGUMENTS_FUNCTION_UNKNOWN,
+ );
+ 
++static ERROR_CHAIN_LIMIT: LiteralCommandErrorType =
++    LiteralCommandErrorType::new("ArkBug: limite d’exécution des fonctions atteinte.");
++
++// Functions are identifiers, optionally prefixed by '#', rather than Brigadier words.
++struct FunctionNameArgument;
++impl pumpkin_command::argument_types::argument_type::ArgumentType<crate::command::CommandSource>
++    for FunctionNameArgument
++{
++    type Item = String;
++    fn parse(
++        &self,
++        reader: &mut pumpkin_command::string_reader::StringReader,
++    ) -> Result<String, pumpkin_command::errors::command_syntax_error::CommandSyntaxError> {
++        use pumpkin_command::argument_types::FromStringReader;
++        let tag = reader.peek() == Some('#');
++        if tag {
++            reader.skip();
++        }
++        let id = pumpkin_util::identifier::Identifier::from_reader(reader)?;
++        Ok(format!("{}{}", if tag { "#" } else { "" }, id))
++    }
++    fn client_side_parser(
++        &self,
++    ) -> pumpkin_command::argument_types::argument_type::JavaClientArgumentType {
++        pumpkin_command::argument_types::argument_type::JavaClientArgumentType::Function
++    }
++}
++
+ struct FunctionSuggestionProvider;
+ 
+ impl SuggestionProvider for FunctionSuggestionProvider {
+@@ -44,14 +73,27 @@ impl CommandExecutor for FunctionExecutor {
+         let name_str = StringArgumentType::get(context, "name")?;
+         let server = context.server();
+ 
+-        let Ok(executed_count) =
+-            server
++        let executed_count =
++            match server
+                 .datapack_manager
+                 .execute_function(server, &context.source, name_str)
+-        else {
+-            return Err(ERROR_UNKNOWN_FUNCTION
+-                .create_without_context(TextComponent::text(name_str.to_string())));
+-        };
++            {
++                Ok(count) => count,
++                Err(reason) if reason.starts_with("ArkBug:") => {
++                    // Report once at the root, rather than once per recursion level.
++                    if function_chain::active() {
++                        return Ok(0);
++                    }
++                    return Err(ERROR_CHAIN_LIMIT.create_without_context());
++                }
++                Err(_) => {
++                    return Err(ERROR_UNKNOWN_FUNCTION
++                        .create_without_context(TextComponent::text(name_str.to_string())));
++                }
++            };
++        if function_chain::active() {
++            return Ok(executed_count as i32);
++        }
+ 
+         if name_str.starts_with('#') {
+             context.source.send_feedback(
+@@ -92,7 +134,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
+ 
+     dispatcher.register(
+         command("function", DESCRIPTION).requires(PERMISSION).then(
+-            argument("name", StringArgumentType::SingleWord)
++            argument("name", FunctionNameArgument)
+                 .suggests(FunctionSuggestionProvider)
+                 .executes(FunctionExecutor),
+         ),
+diff --git a/crates/pumpkin/src/data/datapack/function_chain.rs b/crates/pumpkin/src/data/datapack/function_chain.rs
+new file mode 100644
+index 0000000..aa719af
+--- /dev/null
++++ b/crates/pumpkin/src/data/datapack/function_chain.rs
+@@ -0,0 +1,154 @@
++//! Bounds synchronous function execution, including recursive `execute run` calls.
++use std::cell::Cell;
++use std::marker::PhantomData;
++use std::rc::Rc;
++
++const MAX_DEPTH: usize = 256;
++const MAX_COMMANDS: usize = 65_536;
++const DEPTH_ERROR: &str = "ArkBug: limite de profondeur des fonctions atteinte.";
++const BUDGET_ERROR: &str = "ArkBug: limite de commandes des fonctions atteinte.";
++
++#[derive(Clone, Copy, Default)]
++struct State {
++    depth: usize,
++    commands: usize,
++    failure: Option<&'static str>,
++}
++thread_local! {
++    static CHAIN: Cell<State> = const { Cell::new(State {depth:0,commands:0,failure:None}) };
++}
++
++/// A thread-bound guard: nested commands must share their caller's budget.
++pub(super) struct Guard(PhantomData<Rc<()>>);
++impl Guard {
++    pub(super) fn enter() -> Result<Self, &'static str> {
++        CHAIN.with(|cell| {
++            let mut state = cell.get();
++            if let Some(reason) = state.failure {
++                return Err(reason);
++            }
++            if state.depth >= MAX_DEPTH {
++                state.failure = Some(DEPTH_ERROR);
++                cell.set(state);
++                return Err(DEPTH_ERROR);
++            }
++            state.depth += 1;
++            cell.set(state);
++            Ok(Self(PhantomData))
++        })
++    }
++}
++impl Drop for Guard {
++    fn drop(&mut self) {
++        CHAIN.with(|cell| {
++            let mut state = cell.get();
++            state.depth -= 1;
++            cell.set(if state.depth == 0 {
++                State::default()
++            } else {
++                state
++            });
++        });
++    }
++}
++
++pub(crate) fn active() -> bool {
++    CHAIN.with(|cell| cell.get().depth > 0)
++}
++pub(super) fn failure() -> Option<&'static str> {
++    CHAIN.with(|cell| cell.get().failure)
++}
++pub(super) fn dispatch_next() -> bool {
++    CHAIN.with(|cell| {
++        let mut state = cell.get();
++        // Direct visitor calls outside execution (e.g. resolution tests) are unbounded.
++        if state.depth == 0 {
++            return true;
++        }
++        if state.failure.is_some() {
++            return false;
++        }
++        if state.commands >= MAX_COMMANDS {
++            state.failure = Some(BUDGET_ERROR);
++            cell.set(state);
++            return false;
++        }
++        state.commands += 1;
++        cell.set(state);
++        true
++    })
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn infinite_recursion_stops_and_next_chain_recovers() {
++        fn call() -> Result<(), &'static str> {
++            let _guard = Guard::enter()?;
++            call()
++        }
++        assert_eq!(call(), Err(DEPTH_ERROR));
++        assert!(!active());
++        assert!(failure().is_none());
++        let _guard = Guard::enter().unwrap();
++        assert!(dispatch_next());
++    }
++    #[test]
++    fn wide_and_nested_work_share_one_budget() {
++        let guard = Guard::enter().unwrap();
++        for _ in 0..MAX_COMMANDS / 2 {
++            assert!(dispatch_next());
++        }
++        {
++            let _nested = Guard::enter().unwrap();
++            for _ in 0..MAX_COMMANDS / 2 {
++                assert!(dispatch_next());
++            }
++        }
++        assert!(!dispatch_next());
++        assert_eq!(failure(), Some(BUDGET_ERROR));
++        drop(guard);
++        let _fresh = Guard::enter().unwrap();
++        assert!(dispatch_next());
++    }
++    #[test]
++    fn recursion_failure_aborts_sibling_work() {
++        let _root = Guard::enter().unwrap();
++        let mut nested = Vec::new();
++        for _ in 1..MAX_DEPTH {
++            nested.push(Guard::enter().unwrap());
++        }
++        assert!(Guard::enter().is_err());
++        drop(nested);
++        assert!(!dispatch_next());
++    }
++    #[test]
++    fn unwinding_releases_the_chain() {
++        assert!(
++            std::panic::catch_unwind(|| {
++                let _g = Guard::enter().unwrap();
++                panic!("test");
++            })
++            .is_err()
++        );
++        assert!(!active());
++        let _g = Guard::enter().unwrap();
++        assert!(dispatch_next());
++    }
++    #[test]
++    fn threads_have_independent_chains() {
++        let _g = Guard::enter().unwrap();
++        for _ in 0..MAX_COMMANDS {
++            assert!(dispatch_next());
++        }
++        assert!(!dispatch_next());
++        std::thread::spawn(|| {
++            let _g = Guard::enter().unwrap();
++            assert!(dispatch_next());
++        })
++        .join()
++        .unwrap();
++        assert_eq!(failure(), Some(BUDGET_ERROR));
++    }
++}
+diff --git a/crates/pumpkin/src/data/datapack/mod.rs b/crates/pumpkin/src/data/datapack/mod.rs
+index bb0f17d..bebd7f7 100644
+--- a/crates/pumpkin/src/data/datapack/mod.rs
++++ b/crates/pumpkin/src/data/datapack/mod.rs
+@@ -1,5 +1,6 @@
+ pub mod context_provider_loader;
+ pub mod damage_type_loader;
++pub(crate) mod function_chain;
+ pub mod function_loader;
+ pub mod loot_table_loader;
+ pub mod recipe_loader;
+@@ -596,12 +597,19 @@ impl DatapackManager {
+         source: &CommandSource,
+         name: &str,
+     ) -> Result<usize, String> {
+-        self.visit_function_lines(name, |line| {
++        let guard = function_chain::Guard::enter().map_err(str::to_owned)?;
++        let result = self.visit_function_lines(name, |line| {
+             server
+                 .command_dispatcher
+                 .load()
+                 .handle_command(source, line);
+-        })
++        });
++        let limit = function_chain::failure();
++        drop(guard);
++        match limit {
++            Some(reason) => Err(reason.to_owned()),
++            None => result,
++        }
+     }
+ 
+     fn visit_function_lines(
+@@ -641,8 +649,11 @@ impl DatapackManager {
+         };
+ 
+         let mut total_executed = 0;
+-        for lines in functions {
++        'functions: for lines in functions {
+             for line in lines.iter() {
++                if !function_chain::dispatch_next() {
++                    break 'functions;
++                }
+                 visit(line);
+                 total_executed += 1;
+             }

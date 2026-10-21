@@ -1,0 +1,43 @@
+name: Build and compatibility
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Fetch the pinned Pumpkin source
+        uses: actions/checkout@v7
+        with:
+          repository: Pumpkin-MC/Pumpkin
+          ref: 204a94ed895f041a845630d5a23c094705a0704e
+          path: engine-src
+          persist-credentials: false
+      - name: Apply the release patches
+        run: python3 scripts/prepare-release-engine.py engine-src
+      - name: Run compatibility tests
+        run: python3 -m unittest discover -s tests -p test_compatibility.py -v
+  wasm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install the Rust target
+        run: rustup target add wasm32-wasip2
+      - name: Build the plugin
+        run: cargo build --release --locked --target wasm32-wasip2

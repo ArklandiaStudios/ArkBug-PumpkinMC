@@ -1,0 +1,26 @@
+--- a/crates/pumpkin-protocol/src/codec/data_component.rs
++++ b/crates/pumpkin-protocol/src/codec/data_component.rs
+@@ -2517,7 +2517,8 @@
+ 
+ impl DataComponentCodec<Self> for ProfileImpl {
+     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+-        seq.write_var_int(&VarInt(1))?;
++        // Mojang's Either tag is true for GameProfile, false for Partial.
++        seq.write_bool(false)?;
+         if let Some(name) = &self.name {
+             seq.write_bool(true)?;
+             seq.write_string(name)?;
+@@ -2575,11 +2576,11 @@
+     }
+ 
+     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+-        let either = seq.get_var_int()?.0;
++        let full_profile = seq.get_bool()?;
+         let mut name = None;
+         let mut id = None;
+         let mut properties = Vec::new();
+-        if either == 0 {
++        if full_profile {
+             let uuid = seq.get_uuid()?;
+             let u = uuid.as_u128();
+             id = Some([

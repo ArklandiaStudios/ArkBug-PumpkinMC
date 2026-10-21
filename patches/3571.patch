@@ -1,0 +1,331 @@
+diff --git a/crates/pumpkin-data/src/data_component_impl/book.rs b/crates/pumpkin-data/src/data_component_impl/book.rs
+--- a/crates/pumpkin-data/src/data_component_impl/book.rs
++++ b/crates/pumpkin-data/src/data_component_impl/book.rs
+@@ -1,39 +1,71 @@
+ use crate::data_component_impl::DataComponentImpl;
+ use pumpkin_nbt::compound::NbtCompound;
+ use pumpkin_nbt::tag::NbtTag;
++use pumpkin_util::text::TextComponent;
++
++/// Vanilla books retain both the original content and its optional filtered form.
++#[derive(Clone, Debug, Hash, PartialEq, Eq)]
++pub struct Filterable<T> {
++    pub raw: T,
++    pub filtered: Option<T>,
++}
++
++impl<T> Filterable<T> {
++    pub const fn new(raw: T) -> Self {
++        Self { raw, filtered: None }
++    }
++}
++
++fn read_filterable<T>(tag: &NbtTag, read: impl Fn(&NbtTag) -> Option<T>) -> Option<Filterable<T>> {
++    if let NbtTag::Compound(compound) = tag
++        && let Some(raw) = compound.get("raw")
++    {
++        return Some(Filterable {
++            raw: read(raw)?,
++            filtered: compound.get("filtered").and_then(&read),
++        });
++    }
++    Some(Filterable::new(read(tag)?))
++}
++
++fn write_filterable<T>(value: &Filterable<T>, write: impl Fn(&T) -> NbtTag) -> NbtTag {
++    let mut compound = NbtCompound::new();
++    compound.put("raw", write(&value.raw));
++    if let Some(filtered) = &value.filtered {
++        compound.put("filtered", write(filtered));
++    }
++    NbtTag::Compound(compound)
++}
++
++fn read_string(tag: &NbtTag) -> Option<String> {
++    tag.extract_string().map(ToString::to_string)
++}
++
++fn write_string(value: &String) -> NbtTag {
++    NbtTag::String(value.clone().into_boxed_str())
++}
+ 
+ #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+ pub struct WritableBookContentImpl {
+-    pub pages: Vec<String>,
++    pub pages: Vec<Filterable<String>>,
+ }
++
+ impl WritableBookContentImpl {
+     pub fn read_data(tag: &NbtTag) -> Option<Self> {
+         let mut pages = Vec::new();
+-        if let NbtTag::Compound(c) = tag
+-            && let Some(NbtTag::List(l)) = c.get("pages")
++        if let NbtTag::Compound(compound) = tag
++            && let Some(NbtTag::List(values)) = compound.get("pages")
+         {
+-            for item in l {
+-                if let NbtTag::String(s) = item {
+-                    pages.push(s.to_string());
+-                } else if let NbtTag::Compound(comp) = item {
+-                    if let Some(s) = comp.get_string("raw") {
+-                        pages.push(s.to_string());
+-                    }
+-                }
+-            }
++            pages.extend(values.iter().filter_map(|v| read_filterable(v, read_string)));
+         }
+         Some(Self { pages })
+     }
+ }
++
+ impl DataComponentImpl for WritableBookContentImpl {
+     fn write_data(&self) -> NbtTag {
+         let mut compound = NbtCompound::new();
+-        let pages_tags: Vec<NbtTag> = self
+-            .pages
+-            .iter()
+-            .map(|p| NbtTag::String(p.clone().into_boxed_str()))
+-            .collect();
+-        compound.put("pages", NbtTag::List(pages_tags));
++        compound.put("pages", NbtTag::List(self.pages.iter().map(|p| write_filterable(p, write_string)).collect()));
+         NbtTag::Compound(compound)
+     }
+     default_impl!(WritableBookContent);
+@@ -41,48 +73,40 @@
+ 
+ #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+ pub struct WrittenBookContentImpl {
+-    pub title: String,
++    pub title: Filterable<String>,
+     pub author: String,
+-    pub pages: Vec<String>,
++    pub pages: Vec<Filterable<TextComponent>>,
++    pub generation: i32,
++    pub resolved: bool,
+ }
++
+ impl WrittenBookContentImpl {
+     pub fn read_data(tag: &NbtTag) -> Option<Self> {
++        let compound = tag.extract_compound()?;
++        let title = compound.get("title")
++            .and_then(|v| read_filterable(v, read_string))
++            .unwrap_or_else(|| Filterable::new(String::new()));
++        let author = compound.get_string("author").map_or_else(String::new, ToString::to_string);
+         let mut pages = Vec::new();
+-        let mut title = String::new();
+-        let mut author = String::new();
+-        if let NbtTag::Compound(c) = tag {
+-            if let Some(s) = c.get_string("title") {
+-                title = s.to_string();
+-            }
+-            if let Some(s) = c.get_string("author") {
+-                author = s.to_string();
+-            }
+-            if let Some(NbtTag::List(l)) = c.get("pages") {
+-                for item in l {
+-                    if let NbtTag::String(s) = item {
+-                        pages.push(s.to_string());
+-                    }
+-                }
+-            }
++        if let Some(NbtTag::List(values)) = compound.get("pages") {
++            pages.extend(values.iter().filter_map(|v| read_filterable(v, |text| Some(TextComponent::from_nbt(text)))));
+         }
+         Some(Self {
+-            title,
+-            author,
+-            pages,
++            title, author, pages,
++            generation: compound.get_int("generation").unwrap_or(0),
++            resolved: compound.get_bool("resolved").unwrap_or(false),
+         })
+     }
+ }
++
+ impl DataComponentImpl for WrittenBookContentImpl {
+     fn write_data(&self) -> NbtTag {
+         let mut compound = NbtCompound::new();
+-        compound.put_string("title", self.title.clone());
++        compound.put("title", write_filterable(&self.title, write_string));
+         compound.put_string("author", self.author.clone());
+-        let pages_tags: Vec<NbtTag> = self
+-            .pages
+-            .iter()
+-            .map(|p| NbtTag::String(p.clone().into_boxed_str()))
+-            .collect();
+-        compound.put("pages", NbtTag::List(pages_tags));
++        compound.put("pages", NbtTag::List(self.pages.iter().map(|p| write_filterable(p, |text| text.to_nbt_tag_for_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_3))).collect()));
++        compound.put_int("generation", self.generation);
++        compound.put_bool("resolved", self.resolved);
+         NbtTag::Compound(compound)
+     }
+     default_impl!(WrittenBookContent);
+diff --git a/crates/pumpkin-protocol/src/codec/data_component.rs b/crates/pumpkin-protocol/src/codec/data_component.rs
+--- a/crates/pumpkin-protocol/src/codec/data_component.rs
++++ b/crates/pumpkin-protocol/src/codec/data_component.rs
+@@ -2278,22 +2278,19 @@
+     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+         seq.write_var_int(&VarInt::from(self.pages.len() as i32))?;
+         for page in &self.pages {
+-            seq.write_string(page)?;
+-            seq.write_bool(false)?;
++            seq.write_string(&page.raw)?;
++            seq.write_bool(page.filtered.is_some())?;
++            if let Some(filtered) = &page.filtered { seq.write_string(filtered)?; }
+         }
+         Ok(())
+     }
+-
+     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+         let len = seq.get_var_int()?.0 as usize;
+         let mut pages = Vec::with_capacity(len);
+         for _ in 0..len {
+             let raw = seq.get_str()?.to_string();
+-            let has_filtered = seq.get_bool()?;
+-            if has_filtered {
+-                let _ = seq.get_str()?;
+-            }
+-            pages.push(raw);
++            let filtered = if seq.get_bool()? { Some(seq.get_str()?.to_string()) } else { None };
++            pages.push(Filterable { raw, filtered });
+         }
+         Ok(Self { pages })
+     }
+@@ -2301,45 +2298,39 @@
+ 
+ impl DataComponentCodec<Self> for WrittenBookContentImpl {
+     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+-        seq.write_string(&self.title)?;
+-        seq.write_bool(false)?;
++        seq.write_string(&self.title.raw)?;
++        seq.write_bool(self.title.filtered.is_some())?;
++        if let Some(filtered) = &self.title.filtered { seq.write_string(filtered)?; }
+         seq.write_string(&self.author)?;
+-        seq.write_var_int(&VarInt(0))?;
++        seq.write_var_int(&VarInt(self.generation))?;
+         seq.write_var_int(&VarInt::from(self.pages.len() as i32))?;
+         for page in &self.pages {
+-            let comp = pumpkin_util::text::TextComponent::text(page.clone());
+-            seq.write_slice(&comp.encode_for_version(&JavaMinecraftVersion::V_26_2))?;
+-            seq.write_bool(false)?;
+-        }
+-        seq.write_bool(true)
+-    }
+-
++            seq.write_slice(&page.raw.encode_for_version(&JavaMinecraftVersion::V_26_3))?;
++            seq.write_bool(page.filtered.is_some())?;
++            if let Some(filtered) = &page.filtered {
++                seq.write_slice(&filtered.encode_for_version(&JavaMinecraftVersion::V_26_3))?;
++            }
++        }
++        seq.write_bool(self.resolved)
++    }
+     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+         let title = seq.get_str()?.to_string();
+-        if seq.get_bool()? {
+-            let _ = seq.get_str()?;
+-        }
++        let filtered_title = if seq.get_bool()? { Some(seq.get_str()?.to_string()) } else { None };
+         let author = seq.get_str()?.to_string();
+-        let _generation = seq.get_var_int()?.0;
++        let generation = seq.get_var_int()?.0;
+         let pages_len = seq.get_var_int()?.0 as usize;
+         let mut pages = Vec::with_capacity(pages_len);
+         for _ in 0..pages_len {
+-            let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+-            let comp = tag.as_ref().map_or_else(
+-                pumpkin_util::text::TextComponent::empty,
+-                pumpkin_util::text::TextComponent::from_nbt,
+-            );
+-            if seq.get_bool()? {
+-                let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+-            }
+-            pages.push(comp.get_text());
+-        }
+-        let _resolved = seq.get_bool()?;
+-        Ok(Self {
+-            title,
+-            author,
+-            pages,
+-        })
++            let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_3)?;
++            let raw = tag.as_ref().map_or_else(pumpkin_util::text::TextComponent::empty, pumpkin_util::text::TextComponent::from_nbt);
++            let filtered = if seq.get_bool()? {
++                let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_3)?;
++                Some(tag.as_ref().map_or_else(pumpkin_util::text::TextComponent::empty, pumpkin_util::text::TextComponent::from_nbt))
++            } else { None };
++            pages.push(Filterable { raw, filtered });
++        }
++        let resolved = seq.get_bool()?;
++        Ok(Self { title: Filterable { raw: title, filtered: filtered_title }, author, pages, generation, resolved })
+     }
+ }
+ 
+diff --git a/crates/pumpkin/src/net/java/play/edit_book.rs b/crates/pumpkin/src/net/java/play/edit_book.rs
+--- a/crates/pumpkin/src/net/java/play/edit_book.rs
++++ b/crates/pumpkin/src/net/java/play/edit_book.rs
+@@ -36,9 +36,11 @@
+         if let Some(title) = title {
+             let mut written_book = ItemStack::new(1, &Item::WRITTEN_BOOK);
+             let content = WrittenBookContentImpl {
+-                title,
++                title: pumpkin_data::data_component_impl::Filterable::new(title),
+                 author: player.gameprofile.name.clone(),
+-                pages,
++                pages: pages.into_iter().map(|page| pumpkin_data::data_component_impl::Filterable::new(pumpkin_util::text::TextComponent::text(page))).collect(),
++                generation: 0,
++                resolved: true,
+             };
+             written_book
+                 .patch
+@@ -46,7 +48,7 @@
+             player.inventory().set_held_item(written_book);
+         } else {
+             let mut writable_book = held_stack;
+-            let content = WritableBookContentImpl { pages };
++            let content = WritableBookContentImpl { pages: pages.into_iter().map(pumpkin_data::data_component_impl::Filterable::new).collect() };
+             writable_book
+                 .patch
+                 .retain(|(component, _)| *component != DataComponent::WritableBookContent);
+diff --git a/crates/pumpkin-util/src/text/mod.rs b/crates/pumpkin-util/src/text/mod.rs
+--- a/crates/pumpkin-util/src/text/mod.rs
++++ b/crates/pumpkin-util/src/text/mod.rs
+@@ -901,7 +901,16 @@
+ fn nbt_compound_to_json(compound: &pumpkin_nbt::NbtCompound) -> serde_json::Value {
+     let mut map = serde_json::Map::new();
+     for (k, v) in &compound.child_tags {
+-        map.insert(k.to_string(), nbt_tag_to_json(v));
++        // NBT represents text/style booleans as bytes. Preserve numeric bytes
++        // elsewhere, but feed actual booleans to the text component schema.
++        let value = if matches!(k.as_ref(), "bold" | "italic" | "underlined" | "strikethrough" | "obfuscated" | "interpret" | "hat")
++            && let pumpkin_nbt::tag::NbtTag::Byte(value) = v
++        {
++            serde_json::Value::Bool(*value != 0)
++        } else {
++            nbt_tag_to_json(v)
++        };
++        map.insert(k.to_string(), value);
+     }
+     serde_json::Value::Object(map)
+ }
+diff --git a/crates/pumpkin-util/src/text/color.rs b/crates/pumpkin-util/src/text/color.rs
+--- a/crates/pumpkin-util/src/text/color.rs
++++ b/crates/pumpkin-util/src/text/color.rs
+@@ -53,7 +53,7 @@
+ 
+ impl<'de> Deserialize<'de> for Color {
+     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+-        let s = <&str>::deserialize(deserializer)?;
++        let s = String::deserialize(deserializer)?;
+ 
+         if s == "reset" {
+             Ok(Self::Reset)
+@@ -73,7 +73,7 @@
+ 
+             Ok(Self::Rgb(RGBColor::new(r, g, b)))
+         } else {
+-            Ok(Self::Named(NamedColor::try_from(s).map_err(|()| {
++            Ok(Self::Named(NamedColor::try_from(s.as_str()).map_err(|()| {
+                 serde::de::Error::custom("Invalid named color")
+             })?))
+         }

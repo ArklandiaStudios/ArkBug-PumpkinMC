@@ -1,0 +1,102 @@
+diff --git a/crates/pumpkin-world/src/world_info/anvil.rs b/crates/pumpkin-world/src/world_info/anvil.rs
+--- a/crates/pumpkin-world/src/world_info/anvil.rs
++++ b/crates/pumpkin-world/src/world_info/anvil.rs
+@@ -18,7 +18,7 @@
+     DataPacks, MAXIMUM_SUPPORTED_LEVEL_VERSION, MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
+     MINIMUM_SUPPORTED_LEVEL_VERSION, MINIMUM_SUPPORTED_WORLD_DATA_VERSION, WorldVersion,
+     data_files::{
+-        minecraft_data_dir, read_game_rules, read_wandering_trader, read_weather,
++        find_data_file, minecraft_data_dir, read_game_rules, read_wandering_trader, read_weather,
+         read_world_clocks, read_world_gen_settings, write_custom_boss_events_stub,
+         write_game_rules, write_random_sequences_stub, write_scheduled_events_stub,
+         write_scoreboard_stub, write_stopwatches_stub, write_wandering_trader, write_weather,
+@@ -383,9 +383,7 @@
+         }
+ 
+         // game_rules.dat – prefer the new file; fall back to level.dat values
+-        if minecraft_data_dir(level_folder)
+-            .join("game_rules.dat")
+-            .exists()
++        if find_data_file(level_folder, "game_rules.dat").is_some()
+         {
+             level_data.game_rules = read_game_rules(level_folder);
+         }
+@@ -401,9 +399,7 @@
+         }
+ 
+         // weather.dat
+-        if minecraft_data_dir(level_folder)
+-            .join("weather.dat")
+-            .exists()
++        if find_data_file(level_folder, "weather.dat").is_some()
+         {
+             let weather = read_weather(level_folder);
+             level_data.clear_weather_time = weather.clear_weather_time;
+diff --git a/crates/pumpkin-world/src/world_info/data_files.rs b/crates/pumpkin-world/src/world_info/data_files.rs
+--- a/crates/pumpkin-world/src/world_info/data_files.rs
++++ b/crates/pumpkin-world/src/world_info/data_files.rs
+@@ -117,6 +117,16 @@
+     level_folder.join("data").join("minecraft")
+ }
+ 
++/// Existing Pumpkin root files remain authoritative; Paper/Purpur use the
++/// overworld dimension container for these saved-data files.
++#[must_use]
++pub fn find_data_file(level_folder: &Path, name: &str) -> Option<PathBuf> {
++    let root = minecraft_data_dir(level_folder).join(name);
++    if root.exists() { return Some(root); }
++    let paper = level_folder.join("dimensions/minecraft/overworld/data/minecraft").join(name);
++    paper.exists().then_some(paper)
++}
++
+ /// Ensures the `<world>/data/minecraft/` directory exists.
+ pub fn ensure_minecraft_data_dir(level_folder: &Path) -> Result<PathBuf, WorldInfoError> {
+     let dir = minecraft_data_dir(level_folder);
+@@ -125,10 +135,9 @@
+ }
+ 
+ pub fn read_weather(level_folder: &Path) -> WeatherData {
+-    let path = minecraft_data_dir(level_folder).join("weather.dat");
+-    if !path.exists() {
++    let Some(path) = find_data_file(level_folder, "weather.dat") else {
+         return WeatherData::default();
+-    }
++    };
+     match File::open(&path) {
+         Ok(f) => match read_gzip_compound_tag(f) {
+             Ok(compound) => {
+@@ -453,10 +462,9 @@
+ }
+ 
+ pub fn read_game_rules(level_folder: &Path) -> GameRuleRegistry {
+-    let path = minecraft_data_dir(level_folder).join("game_rules.dat");
+-    if !path.exists() {
++    let Some(path) = find_data_file(level_folder, "game_rules.dat") else {
+         return GameRuleRegistry::default();
+-    }
++    };
+ 
+     match File::open(&path) {
+         Ok(f) => match read_gzip_compound_tag(f) {
+@@ -558,10 +566,9 @@
+ }
+ 
+ pub fn read_wandering_trader(level_folder: &Path) -> WanderingTraderData {
+-    let path = minecraft_data_dir(level_folder).join("wandering_trader.dat");
+-    if !path.exists() {
++    let Some(path) = find_data_file(level_folder, "wandering_trader.dat") else {
+         return WanderingTraderData::default();
+-    }
++    };
+     match File::open(&path) {
+         Ok(f) => match read_gzip_compound_tag(f) {
+             Ok(compound) => {
+@@ -637,7 +644,7 @@
+ ) -> Result<(), WorldInfoError> {
+     let dir = ensure_minecraft_data_dir(level_folder)?;
+     let path = dir.join("scheduled_events.dat");
+-    if path.exists() {
++    if find_data_file(level_folder, "scheduled_events.dat").is_some() {
+         return Ok(());
+     }
+ 

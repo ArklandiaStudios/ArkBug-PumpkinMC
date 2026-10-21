@@ -1,0 +1,176 @@
+diff --git a/crates/pumpkin-world/src/data/player_data.rs b/crates/pumpkin-world/src/data/player_data.rs
+--- a/crates/pumpkin-world/src/data/player_data.rs
++++ b/crates/pumpkin-world/src/data/player_data.rs
+@@ -1,7 +1,9 @@
+ use pumpkin_nbt::compound::NbtCompound;
++use std::collections::HashMap;
+ use std::fs::{File, OpenOptions, create_dir_all};
+ use std::io;
+ use std::path::PathBuf;
++use std::sync::{Arc, Mutex};
+ use tracing::{debug, error};
+ use uuid::Uuid;
+ 
+@@ -14,6 +16,22 @@
+     data_path: PathBuf,
+     /// Whether player data saving is enabled
+     save_enabled: bool,
++    // Retain generations across reconnects while older Rayon jobs may exist.
++    save_states: Mutex<HashMap<Uuid, Arc<Mutex<PlayerSaveState>>>>,
++}
++
++#[derive(Default)]
++struct PlayerSaveState {
++    next_generation: u64,
++    committed_generation: Option<u64>,
++}
++
++/// A snapshot and its ordering token, assigned together before queuing I/O.
++pub struct PlayerDataSnapshot {
++    uuid: Uuid,
++    generation: u64,
++    state: Arc<Mutex<PlayerSaveState>>,
++    data: NbtCompound,
+ }
+ 
+ #[derive(Debug, thiserror::Error)]
+@@ -40,6 +58,7 @@
+         Self {
+             data_path: path,
+             save_enabled: enabled,
++            save_states: Mutex::new(HashMap::new()),
+         }
+     }
+ 
+@@ -122,6 +141,60 @@
+     ///
+     /// A Result indicating success or the error that occurred.
+     pub fn save_player_data(&self, uuid: &Uuid, data: NbtCompound) -> Result<(), PlayerDataError> {
++        let snapshot = self.snapshot_player_data(uuid, || data);
++        self.save_player_snapshot(snapshot)
++    }
++
++    /// Capture state and reserve its generation under the same per-player lock.
++    pub fn snapshot_player_data(
++        &self,
++        uuid: &Uuid,
++        capture: impl FnOnce() -> NbtCompound,
++    ) -> PlayerDataSnapshot {
++        let state = self
++            .save_states
++            .lock()
++            .unwrap_or_else(std::sync::PoisonError::into_inner)
++            .entry(*uuid)
++            .or_default()
++            .clone();
++        let mut guard = state
++            .lock()
++            .unwrap_or_else(std::sync::PoisonError::into_inner);
++        let generation = guard.next_generation;
++        guard.next_generation += 1;
++        let data = capture();
++        drop(guard);
++        PlayerDataSnapshot {
++            uuid: *uuid,
++            generation,
++            state,
++            data,
++        }
++    }
++
++    /// Serialize commits for this player and discard delayed older snapshots.
++    pub fn save_player_snapshot(
++        &self,
++        snapshot: PlayerDataSnapshot,
++    ) -> Result<(), PlayerDataError> {
++        let mut state = snapshot
++            .state
++            .lock()
++            .unwrap_or_else(std::sync::PoisonError::into_inner);
++        if state
++            .committed_generation
++            .is_some_and(|committed| committed >= snapshot.generation)
++        {
++            debug!("Skipping stale player data write for {}", snapshot.uuid);
++            return Ok(());
++        }
++        self.write_player_data(&snapshot.uuid, snapshot.data)?;
++        state.committed_generation = Some(snapshot.generation);
++        Ok(())
++    }
++
++    fn write_player_data(&self, uuid: &Uuid, data: NbtCompound) -> Result<(), PlayerDataError> {
+         // Skip saving if disabled in config
+         if !self.is_save_enabled() {
+             return Ok(());
+diff --git a/crates/pumpkin/src/data/player_server.rs b/crates/pumpkin/src/data/player_server.rs
+--- a/crates/pumpkin/src/data/player_server.rs
++++ b/crates/pumpkin/src/data/player_server.rs
+@@ -33,6 +33,18 @@
+         }
+     }
+ 
++    fn snapshot_player(
++        &self,
++        player: &Player,
++    ) -> pumpkin_world::data::player_data::PlayerDataSnapshot {
++        self.storage
++            .snapshot_player_data(&player.gameprofile.id, || {
++                let mut nbt = NbtCompound::new();
++                player.write_nbt(&mut nbt);
++                nbt
++            })
++    }
++
+     /// Handles a player leaving the server.
+     ///
+     /// This function saves player data when they disconnect.
+@@ -52,10 +64,8 @@
+             .on_closed(player.as_ref());
+         player.on_handled_screen_closed();
+ 
+-        let mut nbt = NbtCompound::new();
+-        player.write_nbt(&mut nbt);
+-
+-        self.storage.save_player_data(&player.gameprofile.id, nbt)?;
++        let snapshot = self.snapshot_player(player);
++        self.storage.save_player_snapshot(snapshot)?;
+         Ok(())
+     }
+ 
+@@ -76,9 +86,7 @@
+             let mut snapshots = Vec::new();
+             for world in server.worlds.load().iter() {
+                 for player in world.players.load().iter() {
+-                    let mut nbt = NbtCompound::new();
+-                    player.write_nbt(&mut nbt);
+-                    snapshots.push((player.gameprofile.id, nbt));
++                    snapshots.push((player.gameprofile.id, self.snapshot_player(player)));
+                 }
+             }
+ 
+@@ -88,8 +96,8 @@
+ 
+             let storage = self.storage.clone();
+             rayon::spawn(move || {
+-                for (uuid, nbt) in snapshots {
+-                    if let Err(e) = storage.save_player_data(&uuid, nbt) {
++                for (uuid, snapshot) in snapshots {
++                    if let Err(e) = storage.save_player_snapshot(snapshot) {
+                         error!("Failed to save player data for {uuid}: {e}");
+                     }
+                 }
+@@ -170,11 +178,8 @@
+             return Ok(());
+         }
+ 
+-        let uuid = player.gameprofile.id;
+-        let mut nbt = NbtCompound::new();
+-        player.write_nbt(&mut nbt);
+-
+-        self.storage.save_player_data(&uuid, nbt)?;
++        let snapshot = self.snapshot_player(player);
++        self.storage.save_player_snapshot(snapshot)?;
+         Ok(())
+     }
+ }

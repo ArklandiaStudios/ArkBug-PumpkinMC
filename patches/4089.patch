@@ -1,0 +1,124 @@
+diff --git a/crates/pumpkin/src/block/blocks/redstone/dispenser.rs b/crates/pumpkin/src/block/blocks/redstone/dispenser.rs
+index 3eb1b22..accd74b 100644
+--- a/crates/pumpkin/src/block/blocks/redstone/dispenser.rs
++++ b/crates/pumpkin/src/block/blocks/redstone/dispenser.rs
+@@ -746,7 +746,7 @@ impl DispenserBlock {
+     }
+ 
+     fn dispense_firework_rocket(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
+-        let _ = item.split(1);
++        let stack = item.split(1);
+         let facing = to_normal(ctx.facing);
+         // Vanilla spawns fireworks closer to the dispenser face and slightly above center.
+         let position = ctx
+@@ -755,7 +755,7 @@ impl DispenserBlock {
+             .add(&(facing * (0.7 * 0.5125)))
+             .add(&Vector3::new(0.0, 0.08, 0.0));
+         let entity = Entity::new(ctx.world.clone(), position, &EntityType::FIREWORK_ROCKET);
+-        let rocket = FireworkRocketEntity::new(entity);
++        let rocket = FireworkRocketEntity::new_with_item(entity, &stack);
+ 
+         // `FireworkRocketEntity` does not expose its inner projectile, so replicate
+         // `ThrownItemEntity::set_velocity` here.
+diff --git a/crates/pumpkin/src/entity/projectile/firework_rocket.rs b/crates/pumpkin/src/entity/projectile/firework_rocket.rs
+index 076baff..ebfc455 100644
+--- a/crates/pumpkin/src/entity/projectile/firework_rocket.rs
++++ b/crates/pumpkin/src/entity/projectile/firework_rocket.rs
+@@ -4,6 +4,7 @@ use crate::{
+     world::World,
+ };
+ use pumpkin_data::entity::EntityStatus;
++use pumpkin_data::{data_component_impl::FireworksImpl, item_stack::ItemStack};
+ use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
+ use pumpkin_protocol::codec::optional_int::OptionalInt;
+ use pumpkin_util::{
+@@ -22,6 +23,19 @@ pub struct FireworkRocketEntity {
+ 
+ impl FireworkRocketEntity {
+     pub fn new(entity: Entity) -> Self {
++        Self::new_with_item(entity, &ItemStack::EMPTY)
++    }
++
++    fn lifetime(item: &ItemStack, random: &mut RandomGenerator) -> u32 {
++        let flight = item
++            .get_data_component::<FireworksImpl>()
++            .map_or(0, |fireworks| {
++                fireworks.flight_duration.clamp(0, 255) as u32
++            });
++        10 * (1 + flight) + random.next_bounded_i32(6) as u32 + random.next_bounded_i32(7) as u32
++    }
++
++    pub fn new_with_item(entity: Entity, item: &ItemStack) -> Self {
+         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
+ 
+         entity.set_velocity(Vector3::new(
+@@ -38,12 +52,11 @@ impl FireworkRocketEntity {
+                 gravity: GRAVITY,
+             },
+             life: 0.into(),
+-            life_time: (10 + random.next_bounded_i32(6) as u32 + random.next_bounded_i32(7) as u32)
+-                .into(),
++            life_time: Self::lifetime(item, &mut random).into(),
+         }
+     }
+ 
+-    pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
++    pub fn new_shot(entity: Entity, shooter: &Entity, item: &ItemStack) -> Self {
+         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
+ 
+         let thrown = ThrownItemEntity::new(entity, shooter, GRAVITY);
+@@ -56,8 +69,7 @@ impl FireworkRocketEntity {
+         let rocket = Self {
+             entity: thrown,
+             life: 0.into(),
+-            life_time: (10 + random.next_bounded_i32(6) as u32 + random.next_bounded_i32(7) as u32)
+-                .into(),
++            life_time: Self::lifetime(item, &mut random).into(),
+         };
+ 
+         rocket.entity.entity.set_synced_data(
+diff --git a/crates/pumpkin/src/item/items/firework_rocket.rs b/crates/pumpkin/src/item/items/firework_rocket.rs
+index dfa713b..d3a12bb 100644
+--- a/crates/pumpkin/src/item/items/firework_rocket.rs
++++ b/crates/pumpkin/src/item/items/firework_rocket.rs
+@@ -43,7 +43,7 @@ impl ItemBehaviour for FireworkRocketItem {
+             ),
+             &EntityType::FIREWORK_ROCKET,
+         );
+-        let entity = FireworkRocketEntity::new(entity);
++        let entity = FireworkRocketEntity::new_with_item(entity, item);
+         world.spawn_entity(Arc::new(entity));
+         item.decrement_unless_creative(player.gamemode.load(), 1);
+         BlockActionResult::Success
+@@ -51,15 +51,6 @@ impl ItemBehaviour for FireworkRocketItem {
+ 
+     fn normal_use(&self, _item: &Item, player: &Player) {
+         if player.get_entity().is_fall_flying() {
+-            let world = player.world();
+-            let entity = Entity::new(
+-                world.clone(),
+-                player.get_entity().pos.load(),
+-                &EntityType::FIREWORK_ROCKET,
+-            );
+-            let entity = FireworkRocketEntity::new_shot(entity, player.get_entity());
+-            world.spawn_entity(Arc::new(entity));
+-
+             let mut held = player.inventory().held_item();
+             let mut is_main = true;
+             if held.is_empty() || held.item.id != Item::FIREWORK_ROCKET.id {
+@@ -69,6 +60,15 @@ impl ItemBehaviour for FireworkRocketItem {
+                     return;
+                 }
+             }
++            let world = player.world();
++            let entity = Entity::new(
++                world.clone(),
++                player.get_entity().pos.load(),
++                &EntityType::FIREWORK_ROCKET,
++            );
++            let entity = FireworkRocketEntity::new_shot(entity, player.get_entity(), &held);
++            world.spawn_entity(Arc::new(entity));
++
+             held.decrement_unless_creative(player.gamemode.load(), 1);
+             if is_main {
+                 player.inventory().set_held_item(held);

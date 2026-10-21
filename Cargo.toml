@@ -1,0 +1,17 @@
+[package]
+name = "arkbug"
+authors = ["Arklandia Studios"]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pumpkin-plugin-api = { git = "https://github.com/Pumpkin-MC/Pumpkin", rev = "204a94ed895f041a845630d5a23c094705a0704e" }
+serde_json = "1"
+
+[profile.release]
+lto = true
+strip = "debuginfo"

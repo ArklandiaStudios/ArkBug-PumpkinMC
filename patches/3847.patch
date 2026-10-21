@@ -1,0 +1,64 @@
+diff --git a/crates/pumpkin-inventory/src/player/player_inventory.rs b/crates/pumpkin-inventory/src/player/player_inventory.rs
+index 81d0388..78b6a0c 100644
+--- a/crates/pumpkin-inventory/src/player/player_inventory.rs
++++ b/crates/pumpkin-inventory/src/player/player_inventory.rs
+@@ -215,6 +215,15 @@ impl PlayerInventory {
+                     equipment.put(slot_type, stack);
+                     return 0;
+                 }
++                if Self::can_stack_add_more(&current, &stack) {
++                    let added = stack
++                        .item_count
++                        .min(current.get_max_stack_size() - current.item_count);
++                    let mut merged = current;
++                    merged.increment(added);
++                    equipment.put(slot_type, merged);
++                    return (stack.item_count - added) as usize;
++                }
+             }
+             return stack.item_count as usize;
+         }
+diff --git a/crates/pumpkin/src/net/bedrock/play/inventory_action.rs b/crates/pumpkin/src/net/bedrock/play/inventory_action.rs
+index b9dae13..b64005f 100644
+--- a/crates/pumpkin/src/net/bedrock/play/inventory_action.rs
++++ b/crates/pumpkin/src/net/bedrock/play/inventory_action.rs
+@@ -207,6 +207,7 @@ impl BedrockClient {
+                         held_item = client_stack;
+                     }
+ 
++                    let before_block_use = held_item.clone();
+                     let result = server.block_registry.use_with_item(
+                         block,
+                         player,
+@@ -222,6 +223,9 @@ impl BedrockClient {
+                     );
+ 
+                     if result.consumes_action() {
++                        if !held_item.are_equal(&before_block_use) {
++                            player.inventory().set_held_item(held_item);
++                        }
+                         return;
+                     }
+ 
+diff --git a/crates/pumpkin/src/net/java/play/use_item_on.rs b/crates/pumpkin/src/net/java/play/use_item_on.rs
+index daf65b2..a0cdc1e 100644
+--- a/crates/pumpkin/src/net/java/play/use_item_on.rs
++++ b/crates/pumpkin/src/net/java/play/use_item_on.rs
+@@ -112,6 +112,7 @@ impl JavaClient {
+ 
+         // Code based on the java class ServerPlayerInteractionManager
+         if !(sneaking && (!held_item_empty || !off_hand_item_empty)) {
++            let before_block_use = item.clone();
+             let result = Self::call_use_item_on(
+                 player,
+                 &position,
+@@ -125,6 +126,9 @@ impl JavaClient {
+             );
+             if result.consumes_action() {
+                 // TODO: Trigger ANY_BLOCK_USE Criteria
++                if !item.are_equal(&before_block_use) {
++                    inventory.set_stack_in_hand(hand, item);
++                }
+ 
+                 if matches!(result, BlockActionResult::SuccessServer) {
+                     player.swing_hand(hand, true);

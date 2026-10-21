@@ -1,0 +1,257 @@
+diff --git a/crates/pumpkin/src/entity/passive/mod.rs b/crates/pumpkin/src/entity/passive/mod.rs
+--- a/crates/pumpkin/src/entity/passive/mod.rs
++++ b/crates/pumpkin/src/entity/passive/mod.rs
+@@ -45,3 +45,5 @@
+ pub mod wandering_trader;
+ pub mod wolf;
+ pub mod zombie_horse;
++
++pub(crate) mod fish_land;
+diff --git a/crates/pumpkin/src/entity/passive/cod.rs b/crates/pumpkin/src/entity/passive/cod.rs
+--- a/crates/pumpkin/src/entity/passive/cod.rs
++++ b/crates/pumpkin/src/entity/passive/cod.rs
+@@ -16,12 +16,16 @@
+ /// Wiki: <https://minecraft.wiki/w/Cod>
+ pub struct CodEntity {
+     pub mob_entity: MobEntity,
++    air: super::fish_land::FishAir,
+ }
+ 
+ impl CodEntity {
+     pub fn new(entity: Entity) -> Arc<Self> {
+         let mob_entity = MobEntity::new(entity);
+-        let cod = Self { mob_entity };
++        let cod = Self {
++            mob_entity,
++            air: super::fish_land::FishAir::default(),
++        };
+         let mob_arc = Arc::new(cod);
+         let mob_weak: Weak<dyn Mob> = {
+             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
+@@ -49,6 +53,19 @@
+ }
+ 
+ impl Mob for CodEntity {
++    fn custom_server_ai_step(&self, _: &dyn crate::entity::EntityBase) {
++        super::fish_land::land_step(self);
++    }
++    fn post_tick(&self) {
++        self.air.tick(self);
++    }
++    fn mob_write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
++        self.air.write(nbt);
++    }
++    fn mob_read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
++        self.air.read(nbt);
++    }
++
+     fn get_mob_entity(&self) -> &MobEntity {
+         &self.mob_entity
+     }
+diff --git a/crates/pumpkin/src/entity/passive/salmon.rs b/crates/pumpkin/src/entity/passive/salmon.rs
+--- a/crates/pumpkin/src/entity/passive/salmon.rs
++++ b/crates/pumpkin/src/entity/passive/salmon.rs
+@@ -13,12 +13,16 @@
+ 
+ pub struct SalmonEntity {
+     pub mob_entity: MobEntity,
++    air: super::fish_land::FishAir,
+ }
+ 
+ impl SalmonEntity {
+     pub fn new(entity: Entity) -> Arc<Self> {
+         let mob_entity = MobEntity::new(entity);
+-        let salmon = Self { mob_entity };
++        let salmon = Self {
++            mob_entity,
++            air: super::fish_land::FishAir::default(),
++        };
+         let mob_arc = Arc::new(salmon);
+         let mob_weak: Weak<dyn Mob> = {
+             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
+@@ -46,6 +50,19 @@
+ }
+ 
+ impl Mob for SalmonEntity {
++    fn custom_server_ai_step(&self, _: &dyn crate::entity::EntityBase) {
++        super::fish_land::land_step(self);
++    }
++    fn post_tick(&self) {
++        self.air.tick(self);
++    }
++    fn mob_write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
++        self.air.write(nbt);
++    }
++    fn mob_read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
++        self.air.read(nbt);
++    }
++
+     fn get_mob_entity(&self) -> &MobEntity {
+         &self.mob_entity
+     }
+diff --git a/crates/pumpkin/src/entity/passive/tropical_fish.rs b/crates/pumpkin/src/entity/passive/tropical_fish.rs
+--- a/crates/pumpkin/src/entity/passive/tropical_fish.rs
++++ b/crates/pumpkin/src/entity/passive/tropical_fish.rs
+@@ -13,12 +13,16 @@
+ 
+ pub struct TropicalFishEntity {
+     pub mob_entity: MobEntity,
++    air: super::fish_land::FishAir,
+ }
+ 
+ impl TropicalFishEntity {
+     pub fn new(entity: Entity) -> Arc<Self> {
+         let mob_entity = MobEntity::new(entity);
+-        let tropical_fish = Self { mob_entity };
++        let tropical_fish = Self {
++            mob_entity,
++            air: super::fish_land::FishAir::default(),
++        };
+         let mob_arc = Arc::new(tropical_fish);
+         let mob_weak: Weak<dyn Mob> = {
+             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
+@@ -46,6 +50,19 @@
+ }
+ 
+ impl Mob for TropicalFishEntity {
++    fn custom_server_ai_step(&self, _: &dyn crate::entity::EntityBase) {
++        super::fish_land::land_step(self);
++    }
++    fn post_tick(&self) {
++        self.air.tick(self);
++    }
++    fn mob_write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
++        self.air.write(nbt);
++    }
++    fn mob_read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
++        self.air.read(nbt);
++    }
++
+     fn get_mob_entity(&self) -> &MobEntity {
+         &self.mob_entity
+     }
+diff --git a/crates/pumpkin/src/entity/passive/pufferfish.rs b/crates/pumpkin/src/entity/passive/pufferfish.rs
+--- a/crates/pumpkin/src/entity/passive/pufferfish.rs
++++ b/crates/pumpkin/src/entity/passive/pufferfish.rs
+@@ -16,12 +16,16 @@
+ /// Wiki: <https://minecraft.wiki/w/Pufferfish>
+ pub struct PufferfishEntity {
+     pub mob_entity: MobEntity,
++    air: super::fish_land::FishAir,
+ }
+ 
+ impl PufferfishEntity {
+     pub fn new(entity: Entity) -> Arc<Self> {
+         let mob_entity = MobEntity::new(entity);
+-        let pufferfish = Self { mob_entity };
++        let pufferfish = Self {
++            mob_entity,
++            air: super::fish_land::FishAir::default(),
++        };
+         let mob_arc = Arc::new(pufferfish);
+         let mob_weak: Weak<dyn Mob> = {
+             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
+@@ -49,6 +53,19 @@
+ }
+ 
+ impl Mob for PufferfishEntity {
++    fn custom_server_ai_step(&self, _: &dyn crate::entity::EntityBase) {
++        super::fish_land::land_step(self);
++    }
++    fn post_tick(&self) {
++        self.air.tick(self);
++    }
++    fn mob_write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
++        self.air.write(nbt);
++    }
++    fn mob_read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
++        self.air.read(nbt);
++    }
++
+     fn get_mob_entity(&self) -> &MobEntity {
+         &self.mob_entity
+     }
+diff --git a/crates/pumpkin/src/entity/passive/fish_land.rs b/crates/pumpkin/src/entity/passive/fish_land.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/pumpkin/src/entity/passive/fish_land.rs
+@@ -0,0 +1,79 @@
++//! Shared fish air supply and small land flops (ArkBug #4063).
++use crate::entity::mob::Mob;
++use pumpkin_data::{
++    damage::DamageType,
++    entity::EntityType,
++    sound::{Sound, SoundCategory},
++};
++use pumpkin_nbt::compound::NbtCompound;
++use pumpkin_util::math::vector3::Vector3;
++use rand::RngExt;
++use std::sync::atomic::{AtomicI32, Ordering::Relaxed};
++
++pub struct FishAir {
++    remaining: AtomicI32,
++}
++impl Default for FishAir {
++    fn default() -> Self {
++        Self {
++            remaining: AtomicI32::new(300),
++        }
++    }
++}
++impl FishAir {
++    pub fn tick(&self, fish: &dyn Mob) {
++        let living = &fish.get_mob_entity().living_entity;
++        let entity = &living.entity;
++        if living.health.load() <= 0.0 || entity.touching_water.load(Relaxed) {
++            self.remaining.store(300, Relaxed);
++        } else if self.remaining.fetch_sub(1, Relaxed) - 1 <= -20 {
++            self.remaining.store(0, Relaxed);
++            fish.damage(fish, 2.0, DamageType::DROWN);
++        }
++    }
++    pub fn write(&self, nbt: &mut NbtCompound) {
++        nbt.put_short("Air", self.remaining.load(Relaxed) as i16);
++    }
++    pub fn read(&self, nbt: &NbtCompound) {
++        if let Some(air) = nbt.get_short("Air") {
++            self.remaining
++                .store(i32::from(air).clamp(-20, 300), Relaxed);
++        }
++    }
++}
++
++pub fn land_step(fish: &dyn Mob) {
++    let mob = fish.get_mob_entity();
++    let living = &mob.living_entity;
++    let entity = &living.entity;
++    if entity.touching_water.load(Relaxed) {
++        return;
++    }
++    // A fish cannot walk towards a land path or retain a previous swimming input.
++    mob.navigator
++        .lock()
++        .unwrap_or_else(std::sync::PoisonError::into_inner)
++        .stop();
++    living.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
++    living.jumping.store(false, Relaxed);
++    if !mob.is_no_ai() && living.health.load() > 0.0 && entity.on_ground.load(Relaxed) {
++        let mut rng = fish.get_random();
++        let impulse = Vector3::new(
++            (rng.random::<f64>() * 2.0 - 1.0) * 0.05,
++            0.4,
++            (rng.random::<f64>() * 2.0 - 1.0) * 0.05,
++        );
++        entity.set_velocity(entity.velocity.load() + impulse);
++        entity.on_ground.store(false, Relaxed);
++        let sound = match entity.entity_type {
++            kind if kind == &EntityType::COD => Sound::EntityCodFlop,
++            kind if kind == &EntityType::SALMON => Sound::EntitySalmonFlop,
++            kind if kind == &EntityType::PUFFERFISH => Sound::EntityPufferFishFlop,
++            _ => Sound::EntityTropicalFishFlop,
++        };
++        entity
++            .world
++            .load()
++            .play_sound(sound, SoundCategory::Neutral, &entity.pos.load());
++    }
++}

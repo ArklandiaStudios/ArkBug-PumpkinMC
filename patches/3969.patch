@@ -1,0 +1,94 @@
+diff --git a/crates/pumpkin/src/item/items/bucket.rs b/crates/pumpkin/src/item/items/bucket.rs
+--- a/crates/pumpkin/src/item/items/bucket.rs
++++ b/crates/pumpkin/src/item/items/bucket.rs
+@@ -264,27 +264,47 @@
+     true
+ }
+ 
++/// Plants which intrinsically contain water implement LiquidBlockContainer in vanilla.
++fn is_water_plant(block: &Block) -> bool {
++    block == &Block::SEAGRASS
++        || block == &Block::TALL_SEAGRASS
++        || block == &Block::KELP
++        || block == &Block::KELP_PLANT
++}
++
++fn filled_bucket_target(
++    world: &World,
++    item: &Item,
++    pos: BlockPos,
++    direction: BlockDirection,
++) -> BlockPos {
++    let block = world.get_block(&pos);
++    if item.id != Item::LAVA_BUCKET.id
++        && item.id != Item::POWDER_SNOW_BUCKET.id
++        && (is_water_plant(block) || block.is_waterloggable())
++    {
++        pos
++    } else {
++        pos.offset(direction.to_offset())
++    }
++}
++
+ pub(crate) fn try_place_filled_bucket(
+     world: &Arc<World>,
+     item: &Item,
+     pos: BlockPos,
+     direction: BlockDirection,
+ ) -> bool {
+-    let (block, state) = world.get_block_and_state(&pos);
+     if item.id == Item::POWDER_SNOW_BUCKET.id {
+         return try_place_powder_snow(world, pos, direction);
+     }
+-
+-    if item.id == Item::WATER_BUCKET.id && block.is_waterlogged(state.id) {
+-        let state_id = block.set_waterlogged(state.id, true).unwrap_or(state.id);
+-        world.set_block_state(&pos, state_id, BlockFlags::NOTIFY_ALL);
+-        world.schedule_fluid_tick(&Fluid::WATER, pos, 5, TickPriority::Normal);
++    let target_pos = filled_bucket_target(world, item, pos, direction);
++    let (block, state) = world.get_block_and_state(&target_pos);
++    if item.id != Item::LAVA_BUCKET.id && is_water_plant(block) {
++        // Its existing water accepts an emptied bucket without replacing the plant
++        // or writing a second source on the clicked face.
+         return true;
+     }
+-
+-    let target_pos = pos.offset(direction.to_offset());
+-    let (block, state) = world.get_block_and_state(&target_pos);
+-
+     if block.is_waterloggable() {
+         if item.id == Item::LAVA_BUCKET.id {
+             return false;
+@@ -294,7 +314,6 @@
+         world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
+         return true;
+     }
+-
+     if state.id == Block::AIR.default_state.id || state.is_liquid() {
+         world.set_block_state(
+             &target_pos,
+@@ -307,7 +326,6 @@
+         );
+         return true;
+     }
+-
+     false
+ }
+ 
+@@ -440,15 +458,7 @@
+             server.plugin_manager.fire_blocking(&server, &mut event);
+         }
+ 
+-        let place_pos = if world
+-            .get_block_and_state(&pos)
+-            .0
+-            .is_waterlogged(world.get_block_state_id(&pos))
+-        {
+-            pos
+-        } else {
+-            pos.offset(direction.to_offset())
+-        };
++        let place_pos = filled_bucket_target(&world, item, pos, direction);
+ 
+         world.play_sound(
+             get_empty_sound(item),

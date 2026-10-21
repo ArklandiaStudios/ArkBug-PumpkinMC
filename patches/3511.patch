@@ -1,0 +1,67 @@
+diff --git a/crates/pumpkin-world/src/data/player_data.rs b/crates/pumpkin-world/src/data/player_data.rs
+--- a/crates/pumpkin-world/src/data/player_data.rs
++++ b/crates/pumpkin-world/src/data/player_data.rs
+@@ -1,5 +1,5 @@
+ use pumpkin_nbt::compound::NbtCompound;
+-use std::fs::{File, create_dir_all};
++use std::fs::{File, OpenOptions, create_dir_all};
+ use std::io;
+ use std::path::PathBuf;
+ use tracing::{debug, error};
+@@ -137,21 +137,41 @@
+             return Err(PlayerDataError::Io(e));
+         }
+ 
+-        // Create the file and write directly with GZip compression
+-        match File::create(&path) {
+-            Ok(file) => {
+-                if let Err(e) = pumpkin_nbt::nbt_compress::write_gzip_compound_tag(data, file) {
+-                    error!("Failed to write compressed player data for {uuid}: {e}");
+-                    Err(PlayerDataError::Nbt(e.to_string()))
+-                } else {
+-                    debug!("Saved player data for {uuid} to disk");
+-                    Ok(())
+-                }
+-            }
+-            Err(e) => {
+-                error!("Failed to create player data file for {uuid}: {e}");
+-                Err(PlayerDataError::Io(e))
+-            }
++        Self::write_atomically(&path, |file| {
++            pumpkin_nbt::nbt_compress::write_gzip_compound_tag(data, file)
++                .map_err(|e| PlayerDataError::Nbt(e.to_string()))
++        })
++        .map_err(|e| {
++            error!("Failed to write compressed player data for {uuid}: {e}");
++            e
++        })?;
++
++        debug!("Saved player data for {uuid} to disk");
++        Ok(())
++    }
++
++    fn write_atomically(
++        path: &std::path::Path,
++        write: impl FnOnce(&File) -> Result<(), PlayerDataError>,
++    ) -> Result<(), PlayerDataError> {
++        static TEMP_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
++        let unique = TEMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++        let temp_path = path.with_extension(format!("dat.tmp.{}.{unique}", std::process::id()));
++        // Never truncate the canonical save, or a pre-existing temporary file.
++        let file = OpenOptions::new()
++            .write(true)
++            .create_new(true)
++            .open(&temp_path)?;
++        let result = (|| {
++            write(&file)?;
++            file.sync_all()?;
++            drop(file);
++            std::fs::rename(&temp_path, path)?;
++            Ok(())
++        })();
++        if result.is_err() {
++            let _ = std::fs::remove_file(&temp_path);
+         }
++        result
+     }
+ }

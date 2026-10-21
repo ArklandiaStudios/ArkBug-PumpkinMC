@@ -1,0 +1,68 @@
+{
+  "plugin_version": "0.1.0",
+  "pumpkin_version": "0.2.0+26.3-26.51.arkbug1",
+  "pumpkin_base_commit": "204a94ed895f041a845630d5a23c094705a0704e",
+  "applied_fixes": [
+    3844,
+    3759,
+    4048,
+    3516,
+    4089,
+    3972,
+    4123,
+    3847,
+    3918,
+    3933,
+    3969,
+    4063,
+    4090,
+    3989,
+    3065,
+    3716,
+    3698,
+    3730,
+    2016,
+    4045,
+    3902,
+    3571,
+    3510,
+    3367,
+    3511,
+    3512
+  ],
+  "author": "Arklandia Studios",
+  "pumpkin_base_version": "0.2.0+26.3-26.51",
+  "minecraft_java": "26.3",
+  "protocol": 777,
+  "files": {
+    "ArkBug-0.1.0.wasm": {
+      "bytes": 605184,
+      "sha256": "429e3307496a0006aa7df0ba0b76e34f958376a2d907e8d916054fdb8849a404"
+    },
+    "pumpkin-0.2.0-arkbug1-linux-x86_64": {
+      "bytes": 199933680,
+      "sha256": "b281fed11dc9fe1088862349f9da0dd563cf5fb149259a26cf4b06d9e5616423"
+    }
+  },
+  "engine_build": {
+    "command": [
+      "cargo",
+      "rustc",
+      "--release",
+      "-p",
+      "pumpkin",
+      "--bin",
+      "pumpkin",
+      "--",
+      "-C",
+      "lto=off"
+    ],
+    "environment": {
+      "RUST_MIN_STACK": "67108864",
+      "CARGO_BUILD_JOBS": "12",
+      "CARGO_PROFILE_RELEASE_LTO": "thin",
+      "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "16"
+    },
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)"
+  }
+}

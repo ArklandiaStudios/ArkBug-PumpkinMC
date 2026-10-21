@@ -1,0 +1,16 @@
+diff --git a/crates/pumpkin-data/src/data_component_impl/utility.rs b/crates/pumpkin-data/src/data_component_impl/utility.rs
+index e7a1c5e..b0449f4 100644
+--- a/crates/pumpkin-data/src/data_component_impl/utility.rs
++++ b/crates/pumpkin-data/src/data_component_impl/utility.rs
+@@ -323,6 +323,11 @@ impl MapDecorationsImpl {
+     }
+ }
+ impl DataComponentImpl for MapDecorationsImpl {
++    fn write_data(&self) -> NbtTag {
++        // This component is not modelled yet. A named TAG_End corrupts the
++        // enclosing item/chunk compound; the existing empty value is a compound.
++        NbtTag::Compound(NbtCompound::new())
++    }
+     default_impl!(MapDecorations);
+ }
+ 

@@ -1,0 +1,578 @@
+diff --git a/crates/pumpkin/src/entity/passive/mod.rs b/crates/pumpkin/src/entity/passive/mod.rs
+--- a/crates/pumpkin/src/entity/passive/mod.rs
++++ b/crates/pumpkin/src/entity/passive/mod.rs
+@@ -47,3 +47,7 @@
+ pub mod zombie_horse;
+ 
+ pub(crate) mod fish_land;
++
++pub(crate) mod fish_swim;
++
++pub(crate) mod squid_swim;
+diff --git a/crates/pumpkin/src/entity/passive/cod.rs b/crates/pumpkin/src/entity/passive/cod.rs
+--- a/crates/pumpkin/src/entity/passive/cod.rs
++++ b/crates/pumpkin/src/entity/passive/cod.rs
+@@ -4,10 +4,7 @@
+ 
+ use crate::entity::{
+     Entity,
+-    ai::goal::{
+-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+-        wander_around::WanderAroundGoal,
+-    },
++    ai::goal::{look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal},
+     mob::{Mob, MobEntity},
+ };
+ 
+@@ -21,7 +18,8 @@
+ 
+ impl CodEntity {
+     pub fn new(entity: Entity) -> Arc<Self> {
+-        let mob_entity = MobEntity::new(entity);
++        let mut mob_entity = MobEntity::new(entity);
++        super::fish_swim::configure(&mut mob_entity);
+         let cod = Self {
+             mob_entity,
+             air: super::fish_land::FishAir::default(),
+@@ -39,8 +37,7 @@
+                 .lock()
+                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+ 
+-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
++            goal_selector.add_goal(1, Box::new(super::fish_swim::FishSwimGoal::default()));
+             goal_selector.add_goal(
+                 2,
+                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
+@@ -55,6 +52,7 @@
+ impl Mob for CodEntity {
+     fn custom_server_ai_step(&self, _: &dyn crate::entity::EntityBase) {
+         super::fish_land::land_step(self);
++        super::fish_swim::swimming_step(self);
+     }
+     fn post_tick(&self) {
+         self.air.tick(self);
+diff --git a/crates/pumpkin/src/entity/passive/salmon.rs b/crates/pumpkin/src/entity/passive/salmon.rs
+--- a/crates/pumpkin/src/entity/passive/salmon.rs
++++ b/crates/pumpkin/src/entity/passive/salmon.rs
+@@ -4,10 +4,7 @@
+ 
+ use crate::entity::{
+     Entity,
+-    ai::goal::{
+-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+-        wander_around::WanderAroundGoal,
+-    },
++    ai::goal::{look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal},
+     mob::{Mob, MobEntity},
+ };
+ 
+@@ -18,7 +15,8 @@
+ 
+ impl SalmonEntity {
+     pub fn new(entity: Entity) -> Arc<Self> {
+-        let mob_entity = MobEntity::new(entity);
++        let mut mob_entity = MobEntity::new(entity);
++        super::fish_swim::configure(&mut mob_entity);
+         let salmon = Self {
+             mob_entity,
+             air: super::fish_land::FishAir::default(),
+@@ -36,8 +34,7 @@
+                 .lock()
+                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+ 
+-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
++            goal_selector.add_goal(1, Box::new(super::fish_swim::FishSwimGoal::default()));
+             goal_selector.add_goal(
+                 2,
+                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
+@@ -52,6 +49,7 @@
+ impl Mob for SalmonEntity {
+     fn custom_server_ai_step(&self, _: &dyn crate::entity::EntityBase) {
+         super::fish_land::land_step(self);
++        super::fish_swim::swimming_step(self);
+     }
+     fn post_tick(&self) {
+         self.air.tick(self);
+diff --git a/crates/pumpkin/src/entity/passive/tropical_fish.rs b/crates/pumpkin/src/entity/passive/tropical_fish.rs
+--- a/crates/pumpkin/src/entity/passive/tropical_fish.rs
++++ b/crates/pumpkin/src/entity/passive/tropical_fish.rs
+@@ -4,10 +4,7 @@
+ 
+ use crate::entity::{
+     Entity,
+-    ai::goal::{
+-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+-        wander_around::WanderAroundGoal,
+-    },
++    ai::goal::{look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal},
+     mob::{Mob, MobEntity},
+ };
+ 
+@@ -18,7 +15,8 @@
+ 
+ impl TropicalFishEntity {
+     pub fn new(entity: Entity) -> Arc<Self> {
+-        let mob_entity = MobEntity::new(entity);
++        let mut mob_entity = MobEntity::new(entity);
++        super::fish_swim::configure(&mut mob_entity);
+         let tropical_fish = Self {
+             mob_entity,
+             air: super::fish_land::FishAir::default(),
+@@ -36,8 +34,7 @@
+                 .lock()
+                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+ 
+-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
++            goal_selector.add_goal(1, Box::new(super::fish_swim::FishSwimGoal::default()));
+             goal_selector.add_goal(
+                 2,
+                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
+@@ -52,6 +49,7 @@
+ impl Mob for TropicalFishEntity {
+     fn custom_server_ai_step(&self, _: &dyn crate::entity::EntityBase) {
+         super::fish_land::land_step(self);
++        super::fish_swim::swimming_step(self);
+     }
+     fn post_tick(&self) {
+         self.air.tick(self);
+diff --git a/crates/pumpkin/src/entity/passive/pufferfish.rs b/crates/pumpkin/src/entity/passive/pufferfish.rs
+--- a/crates/pumpkin/src/entity/passive/pufferfish.rs
++++ b/crates/pumpkin/src/entity/passive/pufferfish.rs
+@@ -4,10 +4,7 @@
+ 
+ use crate::entity::{
+     Entity,
+-    ai::goal::{
+-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+-        wander_around::WanderAroundGoal,
+-    },
++    ai::goal::{look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal},
+     mob::{Mob, MobEntity},
+ };
+ 
+@@ -21,7 +18,8 @@
+ 
+ impl PufferfishEntity {
+     pub fn new(entity: Entity) -> Arc<Self> {
+-        let mob_entity = MobEntity::new(entity);
++        let mut mob_entity = MobEntity::new(entity);
++        super::fish_swim::configure(&mut mob_entity);
+         let pufferfish = Self {
+             mob_entity,
+             air: super::fish_land::FishAir::default(),
+@@ -39,8 +37,7 @@
+                 .lock()
+                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+ 
+-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
++            goal_selector.add_goal(1, Box::new(super::fish_swim::FishSwimGoal::default()));
+             goal_selector.add_goal(
+                 2,
+                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
+@@ -55,6 +52,7 @@
+ impl Mob for PufferfishEntity {
+     fn custom_server_ai_step(&self, _: &dyn crate::entity::EntityBase) {
+         super::fish_land::land_step(self);
++        super::fish_swim::swimming_step(self);
+     }
+     fn post_tick(&self) {
+         self.air.tick(self);
+diff --git a/crates/pumpkin/src/entity/passive/fish_swim.rs b/crates/pumpkin/src/entity/passive/fish_swim.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/pumpkin/src/entity/passive/fish_swim.rs
+@@ -0,0 +1,133 @@
++//! Water-only navigation and movement for the four fish species (#4090).
++use crate::entity::{
++    EntityBase,
++    ai::{
++        goal::{Controls, Goal},
++        pathfinder::{Navigator, NavigatorGoal},
++    },
++    mob::{Mob, MobEntity},
++};
++use pumpkin_data::{entity::EntityType, fluid::Fluid};
++use pumpkin_util::math::vector3::Vector3;
++use rand::RngExt;
++use std::sync::atomic::Ordering::Relaxed;
++
++pub fn is_fish(kind: &EntityType) -> bool {
++    kind == &EntityType::COD
++        || kind == &EntityType::SALMON
++        || kind == &EntityType::TROPICAL_FISH
++        || kind == &EntityType::PUFFERFISH
++}
++pub fn configure(mob: &mut MobEntity) {
++    let size = mob.living_entity.entity.entity_dimension.load();
++    let navigator = mob
++        .navigator
++        .get_mut()
++        .unwrap_or_else(std::sync::PoisonError::into_inner);
++    *navigator = Navigator::water_bound(false);
++    navigator.set_mob_dimensions(size.width, size.height);
++    navigator.set_can_float(true);
++}
++
++#[derive(Default)]
++pub struct FishSwimGoal {
++    target: Option<Vector3<f64>>,
++}
++impl Goal for FishSwimGoal {
++    fn can_start(&mut self, fish: &dyn Mob) -> bool {
++        let mob = fish.get_mob_entity();
++        let entity = &mob.living_entity.entity;
++        if mob.is_no_ai()
++            || !entity.touching_water.load(Relaxed)
++            || fish.get_random().random_range(0..20) != 0
++        {
++            return false;
++        }
++        let pos = entity.block_pos.load();
++        let world = entity.world.load();
++        let mut rng = fish.get_random();
++        self.target = (0..10).find_map(|_| {
++            let candidate = pos.offset(Vector3::new(
++                rng.random_range(-5..=5),
++                rng.random_range(-3..=3),
++                rng.random_range(-5..=5),
++            ));
++            (world.get_fluid(&candidate).matches_type(&Fluid::WATER)
++                && world
++                    .get_block_state(&candidate)
++                    .get_block_collision_shapes_at(&candidate)
++                    .next()
++                    .is_none())
++            .then(|| {
++                Vector3::new(
++                    f64::from(candidate.0.x) + 0.5,
++                    f64::from(candidate.0.y) + 0.5,
++                    f64::from(candidate.0.z) + 0.5,
++                )
++            })
++        });
++        self.target.is_some()
++    }
++    fn start(&mut self, fish: &dyn Mob) {
++        if let Some(target) = self.target {
++            let mob = fish.get_mob_entity();
++            mob.navigator
++                .lock()
++                .unwrap_or_else(std::sync::PoisonError::into_inner)
++                .set_progress(NavigatorGoal::new(
++                    mob.living_entity.entity.pos.load(),
++                    target,
++                    1.0,
++                ));
++        }
++    }
++    fn should_continue(&mut self, fish: &dyn Mob) -> bool {
++        !fish.get_mob_entity().is_no_ai()
++            && fish.get_entity().touching_water.load(Relaxed)
++            && !fish.is_navigator_idle()
++    }
++    fn stop(&mut self, fish: &dyn Mob) {
++        self.target = None;
++        fish.get_mob_entity()
++            .navigator
++            .lock()
++            .unwrap_or_else(std::sync::PoisonError::into_inner)
++            .stop();
++    }
++    fn controls(&self) -> Controls {
++        Controls::MOVE
++    }
++}
++
++pub fn swimming_step(fish: &dyn Mob) {
++    let mob = fish.get_mob_entity();
++    let living = &mob.living_entity;
++    let entity = &living.entity;
++    if !entity.touching_water.load(Relaxed) {
++        return;
++    }
++    living.jumping.store(false, Relaxed);
++    if mob.is_no_ai() {
++        living.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
++        return;
++    }
++    let mut velocity = entity.velocity.load();
++    if entity.is_submerged_in_water() {
++        velocity.y += 0.005;
++    }
++    // The existing water navigator supplies a signed vertical steering input.
++    let mut input = living.movement_input.load();
++    velocity.y += input.y * 0.1;
++    input.y = 0.0;
++    living.movement_input.store(input);
++    entity.velocity.store(velocity);
++}
++
++pub fn travel(caller: &dyn EntityBase, input: Vector3<f64>) {
++    let entity = caller.get_entity();
++    entity.update_velocity_from_input(input, 0.01);
++    entity.move_entity(caller, entity.velocity.load());
++    let mut velocity = entity.velocity.load() * 0.9;
++    velocity.y -= 0.005;
++    entity.velocity.store(velocity);
++}
+diff --git a/crates/pumpkin/src/entity/passive/squid_swim.rs b/crates/pumpkin/src/entity/passive/squid_swim.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/pumpkin/src/entity/passive/squid_swim.rs
+@@ -0,0 +1,95 @@
++//! Native squid thrust: no terrestrial FloatGoal or water-walking input.
++//! Extends ArkBug #4090 after the same surface drift was reproduced on squid.
++use crate::entity::{EntityBase, mob::Mob};
++use pumpkin_data::entity::{EntityStatus, EntityType};
++use pumpkin_util::math::{vector3::Vector3, wrap_degrees};
++use rand::RngExt;
++use std::{
++    f64::consts::{PI, TAU},
++    sync::{Mutex, atomic::Ordering::Relaxed},
++};
++
++pub fn is_squid(kind: &EntityType) -> bool {
++    kind == &EntityType::SQUID || kind == &EntityType::GLOW_SQUID
++}
++struct Motion {
++    phase: f64,
++    phase_speed: f64,
++    direction: Vector3<f64>,
++}
++pub struct SquidMotion(Mutex<Motion>);
++impl Default for SquidMotion {
++    fn default() -> Self {
++        Self(Mutex::new(Motion {
++            phase: 0.0,
++            phase_speed: 0.2 / (rand::random::<f64>() + 1.0),
++            direction: Vector3::new(0.0, 0.0, 0.0),
++        }))
++    }
++}
++impl SquidMotion {
++    pub fn tick(&self, squid: &dyn Mob) {
++        let living = &squid.get_mob_entity().living_entity;
++        let entity = &living.entity;
++        living.jumping.store(false, Relaxed);
++        living.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
++        if squid.get_mob_entity().is_no_ai() || living.health.load() <= 0.0 {
++            if entity.touching_water.load(Relaxed) {
++                entity.velocity.store(entity.velocity.load() * 0.9);
++            }
++            return;
++        }
++        let mut motion = self
++            .0
++            .lock()
++            .unwrap_or_else(std::sync::PoisonError::into_inner);
++        let mut rng = squid.get_random();
++        motion.phase += motion.phase_speed;
++        if motion.phase > TAU {
++            motion.phase -= TAU;
++            if rng.random_range(0..10) == 0 {
++                motion.phase_speed = 0.2 / (rng.random::<f64>() + 1.0);
++            }
++            entity
++                .world
++                .load()
++                .send_entity_status(entity, EntityStatus::SquidAnimSynch, None);
++        }
++        if !entity.touching_water.load(Relaxed) {
++            motion.direction = Vector3::new(0.0, 0.0, 0.0);
++            let velocity = entity.velocity.load();
++            entity.velocity.store(Vector3::new(0.0, velocity.y, 0.0));
++            return;
++        }
++        if rng.random_range(0..50) == 0 || motion.direction == Vector3::new(0.0, 0.0, 0.0) {
++            let angle = rng.random::<f64>() * TAU;
++            motion.direction = Vector3::new(
++                angle.cos() * 0.2,
++                rng.random::<f64>() * 0.2 - 0.1,
++                angle.sin() * 0.2,
++            );
++        }
++        // Mojang Squid.aiStep: a short thrust near the end of the first half
++        // of each tentacle cycle, then a drag phase in the second half.
++        if motion.phase < PI {
++            if motion.phase / PI > 0.75 {
++                entity.velocity.store(motion.direction);
++            }
++        } else {
++            entity.velocity.store(entity.velocity.load() * 0.9);
++        }
++        let velocity = entity.velocity.load();
++        if velocity.x.hypot(velocity.z) > 1.0e-6 {
++            let target_yaw = (-velocity.x.atan2(velocity.z).to_degrees()) as f32;
++            let yaw = entity.yaw.load() + wrap_degrees(target_yaw - entity.yaw.load()) * 0.1;
++            entity.yaw.store(yaw);
++            entity.body_yaw.store(yaw);
++            entity.head_yaw.store(yaw);
++        }
++    }
++}
++
++pub fn travel(caller: &dyn EntityBase) {
++    let entity = caller.get_entity();
++    entity.move_entity(caller, entity.velocity.load());
++}
+diff --git a/crates/pumpkin/src/entity/living.rs b/crates/pumpkin/src/entity/living.rs
+--- a/crates/pumpkin/src/entity/living.rs
++++ b/crates/pumpkin/src/entity/living.rs
+@@ -1561,6 +1561,14 @@
+     }
+ 
+     fn travel_in_fluid(&self, caller: &dyn EntityBase, water: bool) {
++        if water && super::passive::squid_swim::is_squid(self.entity.entity_type) {
++            super::passive::squid_swim::travel(caller);
++            return;
++        }
++        if water && super::passive::fish_swim::is_fish(self.entity.entity_type) {
++            super::passive::fish_swim::travel(caller, self.movement_input.load());
++            return;
++        }
+         let movement_input = self.movement_input.load();
+ 
+         let falling = self.entity.velocity.load().y <= 0.0;
+diff --git a/crates/pumpkin/src/entity/passive/squid.rs b/crates/pumpkin/src/entity/passive/squid.rs
+--- a/crates/pumpkin/src/entity/passive/squid.rs
++++ b/crates/pumpkin/src/entity/passive/squid.rs
+@@ -1,54 +1,27 @@
+-use std::sync::{Arc, Weak};
+-
+-use pumpkin_data::entity::EntityType;
+-
++use super::squid_swim::SquidMotion;
+ use crate::entity::{
+-    Entity,
+-    ai::goal::{
+-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+-        wander_around::WanderAroundGoal,
+-    },
++    Entity, EntityBase,
+     mob::{Mob, MobEntity},
+ };
++use std::sync::Arc;
+ 
+ pub struct SquidEntity {
+     pub mob_entity: MobEntity,
++    motion: SquidMotion,
+ }
+-
+ impl SquidEntity {
+     pub fn new(entity: Entity) -> Arc<Self> {
+-        let mob_entity = MobEntity::new(entity);
+-        let squid = Self { mob_entity };
+-        let mob_arc = Arc::new(squid);
+-        let mob_weak: Weak<dyn Mob> = {
+-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
+-            Arc::downgrade(&mob_arc)
+-        };
+-
+-        {
+-            let mut goal_selector = mob_arc
+-                .mob_entity
+-                .goals_selector
+-                .lock()
+-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+-
+-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+-            // Squids don't have WanderAroundGoal in vanilla (they use custom movement),
+-            // but for now we give it to them.
+-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(0.6)));
+-            goal_selector.add_goal(
+-                2,
+-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
+-            );
+-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
+-        };
+-
+-        mob_arc
++        Arc::new(Self {
++            mob_entity: MobEntity::new(entity),
++            motion: SquidMotion::default(),
++        })
+     }
+ }
+-
+ impl Mob for SquidEntity {
+     fn get_mob_entity(&self) -> &MobEntity {
+         &self.mob_entity
+     }
++    fn custom_server_ai_step(&self, _: &dyn EntityBase) {
++        self.motion.tick(self);
++    }
+ }
+diff --git a/crates/pumpkin/src/entity/passive/glow_squid.rs b/crates/pumpkin/src/entity/passive/glow_squid.rs
+--- a/crates/pumpkin/src/entity/passive/glow_squid.rs
++++ b/crates/pumpkin/src/entity/passive/glow_squid.rs
+@@ -1,55 +1,27 @@
+-use std::sync::{Arc, Weak};
+-
+-use pumpkin_data::entity::EntityType;
+-
++use super::squid_swim::SquidMotion;
+ use crate::entity::{
+-    Entity,
+-    ai::goal::{
+-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+-        wander_around::WanderAroundGoal,
+-    },
++    Entity, EntityBase,
+     mob::{Mob, MobEntity},
+ };
++use std::sync::Arc;
+ 
+-/// Represents a Glow Squid, a passive aquatic mob that emits a glowing particle effect.
+-///
+-/// Wiki: <https://minecraft.wiki/w/Glow_Squid>
+ pub struct GlowSquidEntity {
+     pub mob_entity: MobEntity,
++    motion: SquidMotion,
+ }
+-
+ impl GlowSquidEntity {
+     pub fn new(entity: Entity) -> Arc<Self> {
+-        let mob_entity = MobEntity::new(entity);
+-        let glow_squid = Self { mob_entity };
+-        let mob_arc = Arc::new(glow_squid);
+-        let mob_weak: Weak<dyn Mob> = {
+-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
+-            Arc::downgrade(&mob_arc)
+-        };
+-
+-        {
+-            let mut goal_selector = mob_arc
+-                .mob_entity
+-                .goals_selector
+-                .lock()
+-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+-
+-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
+-            goal_selector.add_goal(
+-                2,
+-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
+-            );
+-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
+-        };
+-
+-        mob_arc
++        Arc::new(Self {
++            mob_entity: MobEntity::new(entity),
++            motion: SquidMotion::default(),
++        })
+     }
+ }
+-
+ impl Mob for GlowSquidEntity {
+     fn get_mob_entity(&self) -> &MobEntity {
+         &self.mob_entity
+     }
++    fn custom_server_ai_step(&self, _: &dyn EntityBase) {
++        self.motion.tick(self);
++    }
+ }

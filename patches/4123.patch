@@ -1,0 +1,28 @@
+diff --git a/crates/pumpkin/src/entity/mob/mod.rs b/crates/pumpkin/src/entity/mob/mod.rs
+index 9bc29df..2180cc1 100644
+--- a/crates/pumpkin/src/entity/mob/mod.rs
++++ b/crates/pumpkin/src/entity/mob/mod.rs
+@@ -568,6 +568,23 @@ impl MobEntity {
+             return;
+         }
+ 
++        if self.living_entity.entity.entity_type == &EntityType::WARDEN {
++            let entity = &self.living_entity.entity;
++            let world = entity.world.load();
++            world.send_entity_status(
++                entity,
++                pumpkin_data::entity::EntityStatus::StartAttacking,
++                None,
++            );
++            world.play_sound_fine(
++                pumpkin_data::sound::Sound::EntityWardenAttackImpact,
++                pumpkin_data::sound::SoundCategory::Hostile,
++                &entity.pos.load(),
++                10.0,
++                1.0,
++            );
++        }
++
+         let attack_damage: f32 =
+             self.living_entity
+                 .get_attribute_value(&Attributes::ATTACK_DAMAGE) as f32;

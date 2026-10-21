@@ -1,0 +1,116 @@
+diff --git a/crates/pumpkin/src/item/items/bucket.rs b/crates/pumpkin/src/item/items/bucket.rs
+index 879b6cd..084bb35 100644
+--- a/crates/pumpkin/src/item/items/bucket.rs
++++ b/crates/pumpkin/src/item/items/bucket.rs
+@@ -144,6 +144,33 @@ fn give_player_bucket_item(player: &Player, item: &'static Item) {
+     }
+ }
+ 
++/// Entity interactions commit their mutable hand stack after returning. Mutate
++/// that stack rather than writing a slot that the caller would then overwrite.
++pub(crate) fn exchange_captured_bucket(player: &Player, hand: &mut ItemStack, item: &'static Item) {
++    let creative = player.gamemode.load() == GameMode::Creative;
++    if creative {
++        let inventory = player
++            .inventory
++            .main_inventory
++            .read()
++            .unwrap_or_else(std::sync::PoisonError::into_inner);
++        if inventory.iter().any(|stack| stack.item.id == item.id) {
++            return;
++        }
++        drop(inventory);
++    } else {
++        hand.decrement(1);
++        if hand.is_empty() {
++            *hand = ItemStack::new(1, item);
++            return;
++        }
++    }
++    let mut result = ItemStack::new(1, item);
++    if !player.inventory.insert_stack_anywhere(&mut result) && !creative && !result.is_empty() {
++        player.drop_item(result);
++    }
++}
++
+ pub(crate) fn try_pickup_fluid_at(
+     world: &Arc<World>,
+     block_pos: BlockPos,
+@@ -470,7 +497,7 @@ impl ItemBehaviour for FilledBucketItem {
+                 let ent = entity.get_entity();
+                 let world = ent.world.load();
+                 world.play_sound(sound, SoundCategory::Neutral, &ent.pos.load());
+-                give_player_bucket_item(player, mob_bucket);
++                exchange_captured_bucket(player, item, mob_bucket);
+                 ent.remove();
+             }
+         }
+diff --git a/crates/pumpkin/src/entity/passive/axolotl.rs b/crates/pumpkin/src/entity/passive/axolotl.rs
+index 14dae3a..2d0b891 100644
+--- a/crates/pumpkin/src/entity/passive/axolotl.rs
++++ b/crates/pumpkin/src/entity/passive/axolotl.rs
+@@ -310,7 +310,11 @@ impl Mob for AxolotlEntity {
+                     return false;
+                 }
+             }
+-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
++            crate::item::items::bucket::exchange_captured_bucket(
++                player,
++                item_stack,
++                &Item::AXOLOTL_BUCKET,
++            );
+             let pos = entity.pos.load();
+             world.play_sound(Sound::ItemBucketFillAxolotl, SoundCategory::Neutral, &pos);
+             entity.remove();
+diff --git a/crates/pumpkin/src/entity/passive/tadpole.rs b/crates/pumpkin/src/entity/passive/tadpole.rs
+index 371ee1e..3b19fc1 100644
+--- a/crates/pumpkin/src/entity/passive/tadpole.rs
++++ b/crates/pumpkin/src/entity/passive/tadpole.rs
+@@ -141,7 +141,11 @@ impl Mob for TadpoleEntity {
+                     return false;
+                 }
+             }
+-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
++            crate::item::items::bucket::exchange_captured_bucket(
++                player,
++                item_stack,
++                &Item::TADPOLE_BUCKET,
++            );
+             let pos = entity.pos.load();
+             world.play_sound(Sound::ItemBucketFillTadpole, SoundCategory::Neutral, &pos);
+             entity.remove();
+diff --git a/crates/pumpkin/src/net/java/play/interact.rs b/crates/pumpkin/src/net/java/play/interact.rs
+index f092b66..cd1bd1e 100644
+--- a/crates/pumpkin/src/net/java/play/interact.rs
++++ b/crates/pumpkin/src/net/java/play/interact.rs
+@@ -98,7 +98,10 @@ impl JavaClient {
+                                     return;
+                                 }
+                             }
+-                            let mut stack = player.inventory().held_item();
++                            let Ok(hand) = pumpkin_util::Hand::from_packet_id(interact.hand.map_or(0, |value| value.0)) else {
++                                return;
++                            };
++                            let mut stack = player.inventory().get_stack_in_hand(hand);
+ 
+                             let item_id = stack.item.id;
+                             let before = stack.clone();
+@@ -118,12 +121,16 @@ impl JavaClient {
+                                     );
+                                     player.world().send_entity_status(
+                                         player.get_entity(),
+-                                        equipment_break_status(&EquipmentSlot::MAIN_HAND),
++                                        equipment_break_status(if matches!(hand, pumpkin_util::Hand::Right) {
++                                            &EquipmentSlot::MAIN_HAND
++                                        } else {
++                                            &EquipmentSlot::OFF_HAND
++                                        }),
+                                         None,
+                                     );
+                                 }
+                             }
+-                            player.inventory().set_held_item(stack);
++                            player.inventory().set_stack_in_hand(hand, stack);
+                         }
+                     }
+                 }

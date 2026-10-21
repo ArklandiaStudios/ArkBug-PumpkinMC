@@ -1,0 +1,262 @@
+diff --git a/crates/pumpkin-data/src/item_stack/mod.rs b/crates/pumpkin-data/src/item_stack/mod.rs
+index 058ccc6..0ccbee2 100644
+--- a/crates/pumpkin-data/src/item_stack/mod.rs
++++ b/crates/pumpkin-data/src/item_stack/mod.rs
+@@ -836,7 +836,7 @@ impl ItemStack {
+         // Try to get item by registry key
+         let item = Item::from_registry_key(registry_key)?;
+ 
+-        let count = compound.get_int("count")? as u8;
++        let count = u8::try_from(compound.get_int("count")?).ok()?;
+ 
+         // Create the item stack
+         let mut item_stack = Self::new(count, item);
+diff --git a/crates/pumpkin-protocol/src/codec/data_component.rs b/crates/pumpkin-protocol/src/codec/data_component.rs
+index 8cf23de..6033801 100644
+--- a/crates/pumpkin-protocol/src/codec/data_component.rs
++++ b/crates/pumpkin-protocol/src/codec/data_component.rs
+@@ -1727,11 +1727,18 @@ impl DataComponentCodec<Self> for EnchantmentGlintOverrideImpl {
+ }
+ 
+ impl DataComponentCodec<Self> for IntangibleProjectileImpl {
+-    fn serialize(&self, _seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+-        Ok(())
++    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
++        // The creative projectile marker has an empty NBT compound payload.
++        seq.write_nbt(NbtTag::Compound(pumpkin_nbt::compound::NbtCompound::new()))
+     }
+ 
+-    fn deserialize(_seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
++    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
++        // The marker is exactly an empty compound; require its terminator.
++        if seq.get_u8()? != pumpkin_nbt::COMPOUND_ID || seq.get_u8()? != pumpkin_nbt::END_ID {
++            return Err(ReadingError::Message(
++                "Invalid intangible projectile compound".into(),
++            ));
++        }
+         Ok(Self)
+     }
+ }
+@@ -2212,24 +2219,45 @@ impl DataComponentCodec<Self> for MapPostProcessingImpl {
+     }
+ }
+ 
++// Bound allocation when decoding untrusted component data.
++const MAX_CHARGED_PROJECTILES: i32 = 1024;
++
+ impl DataComponentCodec<Self> for ChargedProjectilesImpl {
+     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+-        seq.write_var_int(&VarInt::from(self.projectiles.len() as i32))?;
+-        for _ in &self.projectiles {
+-            seq.write_var_int(&VarInt(0))?;
+-            seq.write_var_int(&VarInt(0))?;
+-            seq.write_var_int(&VarInt(0))?;
+-            seq.write_var_int(&VarInt(0))?;
++        let count = i32::try_from(self.projectiles.len())
++            .map_err(|_| WritingError::Message("Too many charged projectiles".into()))?;
++        if count > MAX_CHARGED_PROJECTILES {
++            return Err(WritingError::Message("Too many charged projectiles".into()));
+         }
+-        Ok(())
++        // Encode real item templates, including their component patches. Stage the
++        // result so invalid saved data cannot emit a partial component.
++        let mut encoded = Vec::new();
++        encoded.write_var_int(&VarInt(count))?;
++        for projectile in &self.projectiles {
++            let stack = pumpkin_data::item_stack::ItemStack::read_item_stack(projectile)
++                .filter(|stack| !stack.is_empty())
++                .ok_or_else(|| WritingError::Message("Invalid charged projectile".into()))?;
++            crate::codec::item_stack_seralizer::ItemStackTemplateSerializer::from(stack)
++                .write(&mut encoded)?;
++        }
++        seq.write_slice(&encoded)
+     }
+ 
+     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+-        let len = seq.get_var_int()?.0 as usize;
+-        let mut projectiles = Vec::with_capacity(len);
+-        for _ in 0..len {
+-            let _ = deserialize_item_stack_template(seq)?;
+-            projectiles.push(pumpkin_nbt::compound::NbtCompound::new());
++        let count = seq.get_var_int()?.0;
++        if !(0..=MAX_CHARGED_PROJECTILES).contains(&count) {
++            return Err(ReadingError::Message(
++                "Invalid charged projectile count".into(),
++            ));
++        }
++        let mut projectiles = Vec::with_capacity(count as usize);
++        for _ in 0..count {
++            let stack = crate::codec::item_stack_seralizer::ItemStackSerializer::read_template_with_version(
++                seq, &JavaMinecraftVersion::V_26_3,
++            )?.to_stack();
++            let mut compound = pumpkin_nbt::compound::NbtCompound::new();
++            stack.write_item_stack(&mut compound);
++            projectiles.push(compound);
+         }
+         Ok(Self { projectiles })
+     }
+@@ -2804,3 +2832,164 @@ impl DataComponentCodec<Self> for BreakSoundImpl {
+         Ok(Self)
+     }
+ }
++#[cfg(test)]
++mod arkbug_crossbow_tests {
++    use super::*;
++    use crate::codec::item_stack_seralizer::ItemStackSerializer;
++    use pumpkin_data::{item::Item, item_stack::ItemStack};
++    use pumpkin_nbt::compound::NbtCompound;
++
++    fn charged(creative: bool, amount: usize) -> ChargedProjectilesImpl {
++        let mut arrow = ItemStack::new(1, &Item::ARROW);
++        if creative {
++            arrow.set_data_component(IntangibleProjectileImpl);
++        }
++        let mut nbt = NbtCompound::new();
++        arrow.write_item_stack(&mut nbt);
++        ChargedProjectilesImpl {
++            projectiles: vec![nbt; amount],
++        }
++    }
++
++    // Independent golden bytes: list length, nonempty item template (id, count,
++    // added/removed components), then the creative-only empty NBT compound.
++    #[test]
++    fn arkbug_survival_and_creative_match_wire_layout() {
++        for creative in [false, true] {
++            let mut bytes = Vec::new();
++            charged(creative, 1).serialize(&mut bytes).unwrap();
++            let mut expected = vec![1];
++            expected
++                .write_var_int(&VarInt(i32::from(Item::ARROW.id)))
++                .unwrap();
++            expected.extend([1, u8::from(creative), 0]);
++            if creative {
++                expected.extend([DataComponent::IntangibleProjectile.to_id(), 10, 0]);
++            }
++            assert_eq!(bytes, expected, "creative={creative}");
++        }
++    }
++
++    #[test]
++    fn arkbug_intangible_consumes_exactly_one_empty_compound() {
++        let mut bytes = Vec::new();
++        IntangibleProjectileImpl.serialize(&mut bytes).unwrap();
++        assert_eq!(bytes, [10, 0]);
++        bytes.push(42);
++        let mut input = bytes.as_slice();
++        IntangibleProjectileImpl::deserialize(&mut input).unwrap();
++        assert_eq!(input, [42]);
++    }
++
++    #[test]
++    fn arkbug_empty_single_and_multishot_preserve_projectiles() {
++        for amount in [0, 1, 3] {
++            for creative in [false, true] {
++                let source = charged(creative, amount);
++                let mut bytes = Vec::new();
++                source.serialize(&mut bytes).unwrap();
++                bytes.push(42);
++                let mut input = bytes.as_slice();
++                let decoded = ChargedProjectilesImpl::deserialize(&mut input).unwrap();
++                assert_eq!(input, [42]);
++                assert_eq!(decoded.projectiles.len(), amount);
++                for nbt in &decoded.projectiles {
++                    let arrow = ItemStack::read_item_stack(nbt).unwrap();
++                    assert_eq!(arrow.item.id, Item::ARROW.id);
++                    assert_eq!(arrow.item_count, 1);
++                    assert_eq!(
++                        arrow
++                            .get_data_component::<IntangibleProjectileImpl>()
++                            .is_some(),
++                        creative
++                    );
++                }
++            }
++        }
++    }
++
++    #[test]
++    fn arkbug_saved_charged_crossbow_remains_decodable() {
++        for creative in [false, true] {
++            let mut crossbow = ItemStack::new(1, &Item::CROSSBOW);
++            crossbow.set_data_component(charged(creative, 3));
++            crossbow.set_data_component(DamageImpl { damage: 7 });
++            let mut saved = NbtCompound::new();
++            crossbow.write_item_stack(&mut saved);
++            let restored = ItemStack::read_item_stack(&saved).unwrap();
++            let mut bytes = Vec::new();
++            ItemStackSerializer::from(restored)
++                .write(&mut bytes)
++                .unwrap();
++            bytes.push(42);
++            let mut input = bytes.as_slice();
++            let decoded = ItemStackSerializer::read(&mut input).unwrap().to_stack();
++            assert_eq!(input, [42]);
++            assert_eq!(decoded.item.id, Item::CROSSBOW.id);
++            assert_eq!(
++                decoded.get_data_component::<DamageImpl>().unwrap().damage,
++                7
++            );
++            let projectiles = decoded
++                .get_data_component::<ChargedProjectilesImpl>()
++                .unwrap();
++            assert_eq!(projectiles.projectiles.len(), 3);
++            assert!(ItemStack::read_item_stack(&projectiles.projectiles[0]).is_some());
++        }
++    }
++
++    #[test]
++    fn arkbug_invalid_lengths_and_truncated_data_are_rejected() {
++        for count in [-1, i32::MAX] {
++            let mut bytes = Vec::new();
++            bytes.write_var_int(&VarInt(count)).unwrap();
++            assert!(ChargedProjectilesImpl::deserialize(&mut bytes.as_slice()).is_err());
++        }
++        let mut bytes = Vec::new();
++        charged(true, 1).serialize(&mut bytes).unwrap();
++        for cut in 0..bytes.len() {
++            assert!(ChargedProjectilesImpl::deserialize(&mut &bytes[..cut]).is_err());
++        }
++    }
++
++    #[test]
++    fn arkbug_invalid_saved_projectiles_are_rejected() {
++        for count in [-1, 0, 256] {
++            let mut nbt = NbtCompound::new();
++            nbt.put_string("id", "minecraft:arrow".into());
++            nbt.put_int("count", count);
++            let component = ChargedProjectilesImpl {
++                projectiles: vec![nbt],
++            };
++            assert!(component.serialize(&mut Vec::new()).is_err());
++        }
++    }
++
++    #[test]
++    fn arkbug_export_for_official_decoder() {
++        let Ok(directory) = std::env::var("ARKBUG_FIXTURE_DIR") else {
++            return;
++        };
++        std::fs::create_dir_all(&directory).unwrap();
++        for creative in [false, true] {
++            for count in [0, 1, 3] {
++                let name = format!("{}-{count}", if creative { "creative" } else { "survival" });
++                let component = charged(creative, count);
++                let mut bytes = Vec::new();
++                component.serialize(&mut bytes).unwrap();
++                std::fs::write(format!("{directory}/{name}.component.bin"), bytes).unwrap();
++                let mut stack = ItemStack::new(1, &Item::CROSSBOW);
++                stack.set_data_component(component);
++                stack.set_data_component(DamageImpl { damage: 7 });
++                let mut nbt = NbtCompound::new();
++                stack.write_item_stack(&mut nbt);
++                let restored = ItemStack::read_item_stack(&nbt).unwrap();
++                let mut bytes = Vec::new();
++                ItemStackSerializer::from(restored)
++                    .write(&mut bytes)
++                    .unwrap();
++                std::fs::write(format!("{directory}/{name}.item.bin"), bytes).unwrap();
++            }
++        }
++    }
++}

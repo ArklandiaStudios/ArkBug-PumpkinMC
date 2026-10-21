@@ -1,0 +1,88 @@
+diff --git a/crates/pumpkin/src/world/mod.rs b/crates/pumpkin/src/world/mod.rs
+--- a/crates/pumpkin/src/world/mod.rs
++++ b/crates/pumpkin/src/world/mod.rs
+@@ -652,6 +652,17 @@
+     /// `get_block_entity` takes the saved NBT out of the chunk when it wakes an
+     /// entity up - so this has to run before the chunk is dropped, or everything
+     /// the entity did since it was loaded is lost.
++    /// Persist live block entities while the departing player's chunk tickets
++    /// still keep their chunks available. Eviction cannot write them afterwards.
++    pub(crate) fn save_block_entities_before_ticket_release(
++        &self,
++        chunks: impl IntoIterator<Item = Vector2<i32>>,
++    ) {
++        for chunk_pos in chunks {
++            self.save_block_entities(chunk_pos);
++        }
++    }
++
+     fn save_block_entities(&self, chunk_pos: Vector2<i32>) {
+         let Some(block_entities) = self
+             .block_entities
+@@ -4340,7 +4351,7 @@
+                         // observer sees the player in a world whose chunk manager doesn't match.
+                         self.remove_player(player, false).await;
+                         player.unload_watched_chunks(self).await;
+-                        player.change_world_chunks(&self.level, &destination);
++                        player.change_world_chunks(self, &destination);
+                         player.living_entity.entity.set_world(destination.clone());
+                         destination.players.rcu(|current_list| {
+                             let mut new_list = (**current_list).clone();
+diff --git a/crates/pumpkin/src/entity/player.rs b/crates/pumpkin/src/entity/player.rs
+--- a/crates/pumpkin/src/entity/player.rs
++++ b/crates/pumpkin/src/entity/player.rs
+@@ -1142,7 +1142,7 @@
+         world.remove_player(self, true).await;
+ 
+         let cylindrical = self.watched_section.load();
+-        self.clean_up_chunk_tickets(&world.level);
++        self.clean_up_chunk_tickets(&world);
+         if let Ok(mut sender) = self.chunk_sender.lock() {
+             sender.reset();
+         }
+@@ -1207,7 +1207,11 @@
+             .add_passenger(vehicle.clone(), self.clone());
+     }
+ 
+-    pub fn clean_up_chunk_tickets(&self, level: &Arc<pumpkin_world::level::Level>) {
++    pub fn clean_up_chunk_tickets(&self, world: &World) {
++        world.save_block_entities_before_ticket_release(
++            self.watched_section.load().all_chunks_within(),
++        );
++        let level = &world.level;
+         let mut lock = level
+             .chunk_loading
+             .lock()
+@@ -1237,10 +1241,10 @@
+ 
+     pub fn change_world_chunks(
+         &self,
+-        old_level: &Arc<pumpkin_world::level::Level>,
++        old_world: &World,
+         new_world: &Arc<crate::world::World>,
+     ) {
+-        self.clean_up_chunk_tickets(old_level);
++        self.clean_up_chunk_tickets(old_world);
+         if let Ok(mut listener) = self.chunk_listener.lock() {
+             *listener = new_world.level.chunk_listener.add_global_chunk_listener();
+         }
+@@ -3978,7 +3982,7 @@
+                 });
+                 self.unload_watched_chunks(&current_world).await;
+ 
+-                self.change_world_chunks(&current_world.level, &new_world);
++                self.change_world_chunks(&current_world, &new_world);
+                 self.living_entity.entity.set_world(new_world.clone());
+ 
+                 if new_world.dimension == pumpkin_data::dimension::Dimension::THE_NETHER {
+diff --git a/crates/pumpkin/src/world/chunker.rs b/crates/pumpkin/src/world/chunker.rs
+--- a/crates/pumpkin/src/world/chunker.rs
++++ b/crates/pumpkin/src/world/chunker.rs
+@@ -79,6 +79,7 @@
+     let unloading_chunks: Vec<_> = unloading_iter.collect();
+ 
+     let world = player.world();
++    world.save_block_entities_before_ticket_release(unloading_chunks.iter().copied());
+     let level = &world.level;
+     let mut held_tickets = player
+         .held_chunk_tickets

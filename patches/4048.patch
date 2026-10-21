@@ -1,0 +1,209 @@
+diff --git a/crates/pumpkin-inventory/src/sync_handler.rs b/crates/pumpkin-inventory/src/sync_handler.rs
+index de279a2..4881d5e 100644
+--- a/crates/pumpkin-inventory/src/sync_handler.rs
++++ b/crates/pumpkin-inventory/src/sync_handler.rs
+@@ -18,7 +18,7 @@
+ //! and server stay in sync. If the client detects a desync, it can request a full
+ //! resynchronization.
+ 
+-use std::sync::{Arc, Mutex};
++use std::sync::{Arc, Mutex, Weak};
+ 
+ use pumpkin_data::item_stack::ItemStack;
+ use pumpkin_protocol::{
+@@ -45,7 +45,7 @@ pub struct SyncHandler {
+     /// The player to synchronize inventory updates with.
+     ///
+     /// None until `store_player` is called to attach a player.
+-    player: Mutex<Option<Arc<dyn InventoryPlayer>>>,
++    player: Mutex<Option<Weak<dyn InventoryPlayer>>>,
+ }
+ 
+ impl Default for SyncHandler {
+@@ -70,7 +70,17 @@ impl SyncHandler {
+         self.player
+             .lock()
+             .unwrap_or_else(std::sync::PoisonError::into_inner)
+-            .replace(player);
++            .replace(Arc::downgrade(&player));
++    }
++
++    // The player owns this handler; keep only a weak back-reference. Upgrade
++    // while locked, then release the lock before emitting any packets.
++    fn player(&self) -> Option<Arc<dyn InventoryPlayer>> {
++        self.player
++            .lock()
++            .unwrap_or_else(std::sync::PoisonError::into_inner)
++            .as_ref()
++            .and_then(Weak::upgrade)
+     }
+ 
+     /// Sends a full container content update.
+@@ -92,12 +102,7 @@ impl SyncHandler {
+         properties: &[i32],
+         next_revision: u32,
+     ) {
+-        if let Some(player) = self
+-            .player
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+-            .as_ref()
+-        {
++        if let Some(player) = self.player() {
+             player.enqueue_inventory_packet(
+                 &CSetContainerContent::new(
+                     VarInt(screen_handler.sync_id.into()),
+@@ -138,12 +143,7 @@ impl SyncHandler {
+         stack: &ItemStack,
+         next_revision: u32,
+     ) {
+-        if let Some(player) = self
+-            .player
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+-            .as_ref()
+-        {
++        if let Some(player) = self.player() {
+             player.enqueue_slot_packet(
+                 &CSetContainerSlot::new(
+                     screen_handler.sync_id as i8,
+@@ -164,12 +164,7 @@ impl SyncHandler {
+     /// # Arguments
+     /// - `stack` - The new cursor item
+     pub fn update_cursor_stack(&self, stack: &ItemStack) {
+-        if let Some(player) = self
+-            .player
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+-            .as_ref()
+-        {
++        if let Some(player) = self.player() {
+             player.enqueue_cursor_packet(&CSetCursorItem::new(&ItemStackSerializer::from(
+                 stack.clone(),
+             )));
+@@ -190,12 +185,7 @@ impl SyncHandler {
+         property: i32,
+         value: i32,
+     ) {
+-        if let Some(player) = self
+-            .player
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+-            .as_ref()
+-        {
++        if let Some(player) = self.player() {
+             player.enqueue_property_packet(&CSetContainerProperty::new(
+                 VarInt(screen_handler.sync_id.into()),
+                 property as i16,
+diff --git a/crates/pumpkin/src/entity/player.rs b/crates/pumpkin/src/entity/player.rs
+index 0c81183..84390a3 100644
+--- a/crates/pumpkin/src/entity/player.rs
++++ b/crates/pumpkin/src/entity/player.rs
+@@ -1180,6 +1180,14 @@ impl Player {
+             level.loaded_chunk_count(),
+         );
+ 
++        // Opt-in validation without retaining a disconnected player ourselves.
++        if std::env::var_os("ARKBUG_LIFETIME_AUDIT").is_some() {
++            let weak = Arc::downgrade(self);
++            tokio::spawn(async move {
++                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
++                tracing::info!(references = weak.strong_count(), "ArkBug lifetime audit");
++            });
++        }
+         //self.world().level.list_cached();
+     }
+ 
+diff --git a/crates/pumpkin/src/net/bedrock/login/resource_pack_response.rs b/crates/pumpkin/src/net/bedrock/login/resource_pack_response.rs
+index 1071e4a..9621536 100644
+--- a/crates/pumpkin/src/net/bedrock/login/resource_pack_response.rs
++++ b/crates/pumpkin/src/net/bedrock/login/resource_pack_response.rs
+@@ -54,7 +54,7 @@ impl BedrockClient {
+             }
+             SResourcePackClientResponse::STATUS_COMPLETED => {
+                 debug!("Bedrock: SResourcePackResponse::STATUS_COMPLETED");
+-                let player = self.player.load_full();
++                let player = self.player.load().upgrade();
+                 if let Some(player) = player.as_ref() {
+                     player
+                         .world()
+diff --git a/crates/pumpkin/src/net/bedrock/mod.rs b/crates/pumpkin/src/net/bedrock/mod.rs
+index 6114143..47a0657 100644
+--- a/crates/pumpkin/src/net/bedrock/mod.rs
++++ b/crates/pumpkin/src/net/bedrock/mod.rs
+@@ -97,7 +97,7 @@ pub struct BedrockClient {
+     session: Arc<NetherNetSession>,
+     /// The client's IP address.
+     pub address: SocketAddr,
+-    pub player: ArcSwap<Option<Arc<Player>>>,
++    pub player: ArcSwap<std::sync::Weak<Player>>,
+     pub version: AtomicCell<BedrockMinecraftVersion>,
+     pub client_data: ArcSwap<Option<Arc<ClientData>>>,
+     /// All Bedrock clients
+@@ -151,7 +151,7 @@ impl BedrockClient {
+         let rt_handle = tokio::runtime::Handle::current();
+         Self {
+             session,
+-            player: ArcSwap::new(Arc::new(None)),
++            player: ArcSwap::from_pointee(std::sync::Weak::new()),
+             address,
+             version: AtomicCell::new(BedrockMinecraftVersion::Unknown),
+             client_data: ArcSwap::new(Arc::new(None)),
+@@ -356,7 +356,7 @@ impl BedrockClient {
+     }
+ 
+     pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
+-        let player = self.player.load_full();
++        let player = self.player.load().upgrade();
+         let Some(player) = player.as_ref() else {
+             debug!(
+                 "send_chunks: player not set yet, dropping {} chunks",
+@@ -453,7 +453,7 @@ impl BedrockClient {
+     }
+ 
+     pub fn set_player(&self, player: Arc<Player>) {
+-        self.player.store(Arc::new(Some(player)));
++        self.player.store(Arc::new(Arc::downgrade(&player)));
+     }
+ 
+     #[allow(clippy::unused_async)]
+diff --git a/crates/pumpkin/src/net/java/mod.rs b/crates/pumpkin/src/net/java/mod.rs
+index 9cd0892..28b4e9e 100644
+--- a/crates/pumpkin/src/net/java/mod.rs
++++ b/crates/pumpkin/src/net/java/mod.rs
+@@ -92,7 +92,7 @@ pub struct JavaClient {
+     /// The client's brand or modpack information. Lock-free `ArcSwap`.
+     pub brand: ArcSwap<Option<String>>,
+     /// Associated player reference. Lock-free `ArcSwap`.
+-    pub player: ArcSwap<Option<Arc<Player>>>,
++    pub player: ArcSwap<std::sync::Weak<Player>>,
+     /// A collection of tasks associated with this client. The tasks await completion when removing the client.
+     tasks: TaskTracker,
+     rt_handle: tokio::runtime::Handle,
+@@ -256,7 +256,7 @@ impl JavaClient {
+             network_writer: std::sync::Mutex::new(Some(pending.network_writer)),
+             network_reader: std::sync::Mutex::new(Some(pending.network_reader)),
+             brand: ArcSwap::from_pointee(pending.brand),
+-            player: ArcSwap::from_pointee(None),
++            player: ArcSwap::from_pointee(std::sync::Weak::new()),
+             wait_for_keep_alive: AtomicBool::new(false),
+             received_movement_this_tick: AtomicBool::new(false),
+             keep_alive_id: AtomicCell::new(0),
+@@ -269,7 +269,7 @@ impl JavaClient {
+     }
+ 
+     pub fn set_player(&self, player: Arc<Player>) {
+-        self.player.store(Arc::new(Some(player)));
++        self.player.store(Arc::new(Arc::downgrade(&player)));
+     }
+ 
+     pub async fn progress_player_packets(&self, player: &Arc<Player>, server: &Arc<Server>) {
+@@ -395,7 +395,7 @@ impl JavaClient {
+     }
+ 
+     pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
+-        let player = self.player.load_full();
++        let player = self.player.load().upgrade();
+         let Some(player) = player.as_ref() else {
+             return;
+         };

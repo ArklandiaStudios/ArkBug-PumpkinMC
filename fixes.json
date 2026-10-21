@@ -1,0 +1,883 @@
+{
+  "repository": "Pumpkin-MC/Pumpkin",
+  "fixes": [
+    {
+      "issue": 3844,
+      "pull_requests": [
+        3897
+      ],
+      "patch": "patches/3844.patch"
+    },
+    {
+      "issue": 3759,
+      "pull_requests": [
+        3813
+      ],
+      "patch": "patches/3759.patch"
+    },
+    {
+      "issue": 4048,
+      "pull_requests": [],
+      "patch": "patches/4048.patch"
+    },
+    {
+      "issue": 3516,
+      "pull_requests": [],
+      "patch": "patches/3516.patch",
+      "source_checks": [
+        {
+          "path": "crates/pumpkin/src/block/blocks/plant/crop/mod.rs",
+          "patterns": [
+            "if\\s+world\\.get_raw_brightness\\(pos,\\s*0\\)\\s*<\\s*9\\s*\\{\\s*return;"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/block/blocks/plant/crop/gourds/stem.rs",
+          "patterns": [
+            "if\\s+args\\.world\\.get_raw_brightness\\(args\\.position,\\s*0\\)\\s*<\\s*9\\s*\\{\\s*return;"
+          ]
+        }
+      ]
+    },
+    {
+      "issue": 4089,
+      "pull_requests": [],
+      "patch": "patches/4089.patch",
+      "source_checks": [
+        {
+          "path": "crates/pumpkin/src/entity/projectile/firework_rocket.rs",
+          "patterns": [
+            "get_data_component::<FireworksImpl>",
+            "10\\s*\\*\\s*\\(1\\s*\\+\\s*flight\\)",
+            "life_time:\\s*Self::lifetime\\(item,"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/item/items/firework_rocket.rs",
+          "patterns": [
+            "new_shot\\(entity,\\s*player.get_entity\\(\\),\\s*&held\\)",
+            "new_with_item\\(entity,\\s*item\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/block/blocks/redstone/dispenser.rs",
+          "patterns": [
+            "new_with_item\\(entity,\\s*&stack\\)"
+          ]
+        }
+      ]
+    },
+    {
+      "issue": 3972,
+      "source_checks": [
+        {
+          "path": "crates/pumpkin/src/item/items/bucket.rs",
+          "patterns": [
+            "Block::POWDER_SNOW.default_state.id,\\s*BlockFlags::NOTIFY_ALL"
+          ]
+        }
+      ],
+      "pull_requests": [],
+      "patch": "patches/3972.patch"
+    },
+    {
+      "issue": 4123,
+      "source_checks": [
+        {
+          "path": "crates/pumpkin/src/entity/mob/mod.rs",
+          "patterns": [
+            "EntityType::WARDEN\\s*\\{.{0,700}EntityStatus::StartAttacking",
+            "EntityWardenAttackImpact"
+          ]
+        }
+      ],
+      "pull_requests": [],
+      "patch": "patches/4123.patch"
+    },
+    {
+      "issue": 3847,
+      "source_checks": [
+        {
+          "path": "crates/pumpkin/src/net/java/play/use_item_on.rs",
+          "patterns": [
+            "before_block_use",
+            "if !item.are_equal\\(&before_block_use\\)\\s*\\{\\s*inventory.set_stack_in_hand\\(hand, item\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/net/bedrock/play/inventory_action.rs",
+          "patterns": [
+            "before_block_use",
+            "if !held_item.are_equal\\(&before_block_use\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin-inventory/src/player/player_inventory.rs",
+          "patterns": [
+            "if Self::can_stack_add_more\\(&current, &stack\\)",
+            "equipment.put\\(slot_type, merged\\)"
+          ]
+        }
+      ],
+      "pull_requests": [],
+      "patch": "patches/3847.patch"
+    },
+    {
+      "issue": 3918,
+      "source_checks": [
+        {
+          "path": "crates/pumpkin/src/entity/projectile/trident.rs",
+          "patterns": [
+            "dealt_damage: AtomicBool",
+            "if self.dealt_damage.load\\(Ordering::Relaxed\\)",
+            "if self.dealt_damage.swap\\(true, Ordering::SeqCst\\)"
+          ]
+        }
+      ],
+      "pull_requests": [],
+      "patch": "patches/3918.patch"
+    },
+    {
+      "issue": 3933,
+      "source_checks": [
+        {
+          "path": "crates/pumpkin/src/item/items/bucket.rs",
+          "patterns": [
+            "pub\\(crate\\) fn exchange_captured_bucket",
+            "exchange_captured_bucket\\(player, item, mob_bucket\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/entity/passive/axolotl.rs",
+          "patterns": [
+            "exchange_captured_bucket\\(\\s*player,\\s*item_stack,\\s*&Item::AXOLOTL_BUCKET"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/entity/passive/tadpole.rs",
+          "patterns": [
+            "exchange_captured_bucket\\(\\s*player,\\s*item_stack,\\s*&Item::TADPOLE_BUCKET"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/net/java/play/interact.rs",
+          "patterns": [
+            "get_stack_in_hand\\(hand\\)",
+            "set_stack_in_hand\\(hand, stack\\)"
+          ]
+        }
+      ],
+      "pull_requests": [],
+      "patch": "patches/3933.patch"
+    },
+    {
+      "issue": 3969,
+      "pull_requests": [],
+      "patch": "patches/3969.patch",
+      "source_checks": [
+        {
+          "path": "crates/pumpkin/src/item/items/bucket.rs",
+          "patterns": [
+            "fn is_water_plant",
+            "Block::SEAGRASS.*Block::TALL_SEAGRASS.*Block::KELP.*Block::KELP_PLANT",
+            "if item.id != Item::LAVA_BUCKET.id && is_water_plant\\(block\\)",
+            "let place_pos = filled_bucket_target\\(&world, item, pos, direction\\)"
+          ]
+        }
+      ]
+    },
+    {
+      "issue": 4063,
+      "pull_requests": [],
+      "patch": "patches/4063.patch",
+      "source_checks": [
+        {
+          "path": "crates/pumpkin/src/entity/passive/fish_land.rs",
+          "patterns": [
+            "pub fn land_step",
+            "movement_input.store\\(Vector3::new\\(0.0, 0.0, 0.0\\)\\)",
+            "AtomicI32::new\\(300\\)",
+            "fish.damage\\(fish, 2.0, DamageType::DROWN\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/entity/passive/cod.rs",
+          "patterns": [
+            "fish_land::land_step\\(self\\)",
+            "self.air.tick\\(self\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/entity/passive/salmon.rs",
+          "patterns": [
+            "fish_land::land_step\\(self\\)",
+            "self.air.tick\\(self\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/entity/passive/tropical_fish.rs",
+          "patterns": [
+            "fish_land::land_step\\(self\\)",
+            "self.air.tick\\(self\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/entity/passive/pufferfish.rs",
+          "patterns": [
+            "fish_land::land_step\\(self\\)",
+            "self.air.tick\\(self\\)"
+          ]
+        }
+      ]
+    },
+    {
+      "issue": 4090,
+      "pull_requests": [],
+      "patch": "patches/4090.patch",
+      "source_checks": [
+        {
+          "path": "crates/pumpkin/src/entity/passive/fish_swim.rs",
+          "patterns": [
+            "Navigator::water_bound\\(false\\)",
+            "pub fn swimming_step",
+            "entity.update_velocity_from_input\\(input, 0.01\\)",
+            "velocity.y -= 0.005"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/entity/living.rs",
+          "patterns": [
+            "fish_swim::travel\\(caller, self.movement_input.load\\(\\)\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/entity/passive/cod.rs",
+          "patterns": [
+            "fish_swim::configure",
+            "fish_swim::FishSwimGoal",
+            "fish_swim::swimming_step\\(self\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/entity/passive/salmon.rs",
+          "patterns": [
+            "fish_swim::configure",
+            "fish_swim::FishSwimGoal",
+            "fish_swim::swimming_step\\(self\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/entity/passive/tropical_fish.rs",
+          "patterns": [
+            "fish_swim::configure",
+            "fish_swim::FishSwimGoal",
+            "fish_swim::swimming_step\\(self\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/entity/passive/pufferfish.rs",
+          "patterns": [
+            "fish_swim::configure",
+            "fish_swim::FishSwimGoal",
+            "fish_swim::swimming_step\\(self\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/entity/passive/squid_swim.rs",
+          "patterns": [
+            "pub struct SquidMotion",
+            "SquidAnimSynch",
+            "motion.phase / PI > 0.75",
+            "entity.velocity.store\\(entity.velocity.load\\(\\) \\* 0.9\\)",
+            "entity.move_entity\\(caller, entity.velocity.load\\(\\)\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/entity/living.rs",
+          "patterns": [
+            "squid_swim::travel\\(caller\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/entity/passive/squid.rs",
+          "patterns": [
+            "motion: SquidMotion",
+            "self.motion.tick\\(self\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/entity/passive/glow_squid.rs",
+          "patterns": [
+            "motion: SquidMotion",
+            "self.motion.tick\\(self\\)"
+          ]
+        }
+      ],
+      "scope": "Correction de la remontée permanente des poissons ; extension aux poulpes normaux et luisants signalée en jeu."
+    },
+    {
+      "issue": 3989,
+      "pull_requests": [],
+      "patch": "patches/3989.patch",
+      "source_checks": [
+        {
+          "path": "crates/pumpkin/src/block/blocks/vault.rs",
+          "patterns": [
+            "VaultLikeProperties::default\\(args.block\\)"
+          ]
+        }
+      ],
+      "scope": "Crash à la pose d’un coffre-fort : propriétés Vault au lieu d’échelle."
+    },
+    {
+      "issue": 3065,
+      "pull_requests": [],
+      "patch": "patches/3065.patch",
+      "source_checks": [
+        {
+          "path": "crates/pumpkin/src/block/blocks/plant/eyeblossom.rs",
+          "patterns": [
+            "trail_data.put_f64\\(target.x\\)",
+            "trail_data.put_i32",
+            "trail_data.put_u8",
+            "&trail_data"
+          ]
+        }
+      ],
+      "scope": "Paquet Trail de transformation des fleurs à yeux, décodé par le codec officiel Java 26.3."
+    },
+    {
+      "issue": 3716,
+      "pull_requests": [],
+      "patch": "patches/3716.patch",
+      "source_checks": [
+        {
+          "path": "tools/pumpkin-codegen/src/wit/packet_mapping.rs",
+          "patterns": [
+            "let server_states = &\\[\"play\"\\];"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/plugin/loader/wasm/wasm_host/wit/v0_1/generated_packets.rs",
+          "patterns": [
+            "pub fn deserialize_java_serverbound_packet\\([^}]*java::server::play::"
+          ]
+        }
+      ],
+      "scope": "Les événements de réception avec un joueur utilisent uniquement les IDs Play ; les types non représentés restent Unknown avec leur charge utile brute."
+    },
+    {
+      "issue": 3698,
+      "pull_requests": [],
+      "patch": "patches/3698.patch",
+      "source_checks": [
+        {
+          "path": "crates/pumpkin-data/src/data_component_impl/utility.rs",
+          "patterns": [
+            "impl DataComponentImpl for MapDecorationsImpl\\s*\\{\\s*fn write_data\\(&self\\) -> NbtTag\\s*\\{\\s*NbtTag::Compound\\(NbtCompound::new\\(\\)\\)"
+          ]
+        }
+      ],
+      "scope": "Empêche un TAG_End nommé de rendre le chunk illisible. Les décorations de carte restent non modélisées et ne sont pas préservées par ce correctif."
+    },
+    {
+      "issue": 3730,
+      "pull_requests": [],
+      "patch": "patches/3730.patch",
+      "source_checks": [
+        {
+          "path": "crates/pumpkin-protocol/src/codec/data_component.rs",
+          "patterns": [
+            "impl DataComponentCodec<Self> for ProfileImpl\\s*\\{\\s*fn serialize[^}]*seq.write_bool\\(false\\)",
+            "let full_profile = seq.get_bool\\(\\)\\?;",
+            "if full_profile \\{"
+          ]
+        }
+      ],
+      "scope": "Étiquette Either des profils : écriture Partial=false, lecture GameProfile=true."
+    },
+    {
+      "issue": 2016,
+      "pull_requests": [
+        3924
+      ],
+      "patch": "patches/2016-4045.patch",
+      "source_checks": [
+        {
+          "path": "crates/pumpkin/src/world/mod.rs",
+          "patterns": [
+            "neighbor_updater::update_neighbors_at",
+            "neighbor_updater::update_shape",
+            "neighbour_update_flags.remove\\(BlockFlags::SKIP_DROPS\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/world/neighbor_updater.rs",
+          "patterns": [
+            "MAX_CHAINED_UPDATES: usize = 1_000_000",
+            "struct CascadeGuard",
+            "stack.promote_staged\\(\\)",
+            "neighbor_state_id = world.get_block_state_id"
+          ]
+        }
+      ],
+      "scope": "Débordement de pile des cascades de mises à jour : pousses, plaques de pression et feu sans support ; port du correctif amont #3924 sur la stable 26.3."
+    },
+    {
+      "issue": 4045,
+      "pull_requests": [
+        3924
+      ],
+      "patch": "patches/2016-4045.patch",
+      "source_checks": [
+        {
+          "path": "crates/pumpkin/src/world/mod.rs",
+          "patterns": [
+            "neighbor_updater::update_neighbors_at",
+            "neighbor_updater::update_shape",
+            "neighbour_update_flags.remove\\(BlockFlags::SKIP_DROPS\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/world/neighbor_updater.rs",
+          "patterns": [
+            "MAX_CHAINED_UPDATES: usize = 1_000_000",
+            "struct CascadeGuard",
+            "stack.promote_staged\\(\\)",
+            "neighbor_state_id = world.get_block_state_id"
+          ]
+        }
+      ],
+      "scope": "Débordement de pile des cascades de mises à jour : pousses, plaques de pression et feu sans support ; port du correctif amont #3924 sur la stable 26.3."
+    },
+    {
+      "issue": 3902,
+      "pull_requests": [],
+      "patch": "patches/3902.patch",
+      "source_checks": [
+        {
+          "path": "crates/pumpkin/src/world/mod.rs",
+          "patterns": [
+            "pub\\(crate\\) fn save_block_entities_before_ticket_release"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/entity/player.rs",
+          "patterns": [
+            "pub fn clean_up_chunk_tickets\\(&self, world: &World\\)",
+            "world.save_block_entities_before_ticket_release\\(.{0,150}let level = &world.level",
+            "self.clean_up_chunk_tickets\\(old_world\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/world/chunker.rs",
+          "patterns": [
+            "save_block_entities_before_ticket_release\\(unloading_chunks.iter\\(\\).copied\\(\\)\\)"
+          ]
+        }
+      ],
+      "scope": "Persister les coffres et autres entités de blocs avant la libération des tickets lors des déconnexions, changements de monde et sorties de la zone visible ; prévient la perte d’inventaire sans save-all."
+    },
+    {
+      "issue": 3571,
+      "pull_requests": [],
+      "patch": "patches/3571.patch",
+      "source_checks": [
+        {
+          "path": "crates/pumpkin-data/src/data_component_impl/book.rs",
+          "patterns": [
+            "pub struct Filterable<T>",
+            "pub title: Filterable<String>",
+            "pub pages: Vec<Filterable<TextComponent>>",
+            "read_filterable",
+            "write_filterable",
+            "compound.put_int\\(\"generation\", self.generation\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin-protocol/src/codec/data_component.rs",
+          "patterns": [
+            "seq.write_string\\(&self.title.raw\\)",
+            "seq.write_bool\\(self.resolved\\)",
+            "filtered: filtered_title"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/net/java/play/edit_book.rs",
+          "patterns": [
+            "Filterable::new\\(title\\)",
+            "generation: 0",
+            "resolved: true"
+          ]
+        },
+        {
+          "path": "crates/pumpkin-util/src/text/mod.rs",
+          "patterns": [
+            "\"bold\" \\| \"italic\"",
+            "serde_json::Value::Bool\\(\\*value != 0\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin-util/src/text/color.rs",
+          "patterns": [
+            "let s = String::deserialize\\(deserializer\\)\\?;",
+            "NamedColor::try_from\\(s.as_str\\(\\)\\)"
+          ]
+        }
+      ],
+      "scope": "Livres écrits/éditables : lecture et écriture des valeurs filtrables, conservation des titres, pages enrichies, variantes filtrées, génération et état résolu ; édition/signature et paquets vanilla préservés."
+    },
+    {
+      "issue": 3510,
+      "pull_requests": [
+        3692
+      ],
+      "patch": "patches/3510.patch",
+      "source_checks": [
+        {
+          "path": "crates/pumpkin-world/src/world_info/anvil.rs",
+          "patterns": [
+            "std::fs::copy\\(&path, &path_old\\)\\?;",
+            "std::fs::rename\\(&path_new, &path\\)\\?;"
+          ]
+        }
+      ],
+      "scope": "Les échecs de copie de sauvegarde ou de remplacement de level.dat sont propagés au lieu de signaler un succès ; le fichier précédent est conservé en cas de copie échouée."
+    },
+    {
+      "issue": 3367,
+      "pull_requests": [],
+      "patch": "patches/3367.patch",
+      "source_checks": [
+        {
+          "path": "crates/pumpkin-world/src/world_info/data_files.rs",
+          "patterns": [
+            "pub fn find_data_file",
+            "dimensions/minecraft/overworld/data/minecraft",
+            "find_data_file\\(level_folder, \"game_rules.dat\"\\)",
+            "find_data_file\\(level_folder, \"weather.dat\"\\)",
+            "find_data_file\\(level_folder, \"wandering_trader.dat\"\\)",
+            "find_data_file\\(level_folder, \"scheduled_events.dat\"\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin-world/src/world_info/anvil.rs",
+          "patterns": [
+            "find_data_file\\(level_folder, \"game_rules.dat\"\\).is_some\\(\\)",
+            "find_data_file\\(level_folder, \"weather.dat\"\\).is_some\\(\\)"
+          ]
+        }
+      ],
+      "scope": "Import des fichiers gamerules, météo et marchand ambulant depuis le conteneur overworld Paper/Purpur si la racine est absente ; priorité de la racine conservée et aucun fichier scheduled_events vide ne masque les événements existants. Exécution des événements non implémentée par ce patch."
+    },
+    {
+      "issue": 3511,
+      "pull_requests": [
+        3634
+      ],
+      "patch": "patches/3511.patch",
+      "source_checks": [
+        {
+          "path": "crates/pumpkin-world/src/data/player_data.rs",
+          "patterns": [
+            "fn write_atomically",
+            "create_new\\(true\\)",
+            "file.sync_all\\(\\)\\?",
+            "std::fs::rename\\(&temp_path, path\\)\\?",
+            "remove_file\\(&temp_path\\)"
+          ]
+        }
+      ],
+      "scope": "Sauvegardes joueur écrites dans un temporaire unique, synchronisées puis renommées ; une écriture partielle échouée conserve le fichier courant et nettoie le temporaire."
+    },
+    {
+      "issue": 3512,
+      "pull_requests": [
+        3634,
+        3537
+      ],
+      "patch": "patches/3512.patch",
+      "source_checks": [
+        {
+          "path": "crates/pumpkin-world/src/data/player_data.rs",
+          "patterns": [
+            "pub struct PlayerDataSnapshot",
+            "pub fn snapshot_player_data",
+            "pub fn save_player_snapshot",
+            "Skipping stale player data write",
+            "committed_generation = Some\\(snapshot.generation\\)"
+          ]
+        },
+        {
+          "path": "crates/pumpkin/src/data/player_server.rs",
+          "patterns": [
+            "self\\.storage\\s*\\.snapshot_player_data",
+            "snapshots.push\\(\\(player.gameprofile.id, self.snapshot_player\\(player\\)\\)\\)",
+            "storage.save_player_snapshot\\(snapshot\\)"
+          ]
+        }
+      ],
+      "scope": "Capture des états et attribution de générations sous un verrou par joueur ; sauvegardes périodiques, manuelles et de déconnexion sérialisées, instantanés plus anciens rejetés après une sauvegarde plus récente."
+    }
+  ],
+  "builds": [
+    {
+      "server_version": "0.2.0+26.3-26.51.arkbug2",
+      "base_commit": "204a94ed895f041a845630d5a23c094705a0704e",
+      "sha256": "c7748b8b31437597d93bc981884a8367e82260c6ba8ecb4bcccc2dbd36a8248f",
+      "applied_fixes": [
+        3844,
+        3759,
+        4048
+      ]
+    },
+    {
+      "server_version": "0.2.0+26.3-26.51.arkbug3",
+      "base_commit": "204a94ed895f041a845630d5a23c094705a0704e",
+      "sha256": "7337b4ce1e0045e778c325b98e83363dcae6ab28e4a58e5d9e277c9ec8f67fd5",
+      "applied_fixes": [
+        3844,
+        3759,
+        4048,
+        3516,
+        4089
+      ]
+    },
+    {
+      "server_version": "0.2.0+26.3-26.51.arkbug4",
+      "base_commit": "204a94ed895f041a845630d5a23c094705a0704e",
+      "sha256": "ebef41d6b7ea628cdac52e722ecde894e55143c4a3e515b1c54ce0dbebdfb5e0",
+      "applied_fixes": [
+        3844,
+        3759,
+        4048,
+        3516,
+        4089,
+        3972,
+        4123,
+        3847,
+        3918,
+        3933
+      ]
+    },
+    {
+      "server_version": "0.2.0+26.3-26.51.arkbug5",
+      "base_commit": "204a94ed895f041a845630d5a23c094705a0704e",
+      "sha256": "5ce5951f62fd66734a84609e826fcee6382dee42c93dc58db1943cae228e2ae4",
+      "applied_fixes": [
+        3844,
+        3759,
+        4048,
+        3516,
+        4089,
+        3972,
+        4123,
+        3847,
+        3918,
+        3933,
+        3969,
+        4063,
+        4090
+      ]
+    },
+    {
+      "server_version": "0.2.0+26.3-26.51.arkbug6",
+      "base_commit": "204a94ed895f041a845630d5a23c094705a0704e",
+      "sha256": "f93501d0fe28356c53cb4485b3f31586bb11a09510a488708781c88ecb610cd7",
+      "applied_fixes": [
+        3844,
+        3759,
+        4048,
+        3516,
+        4089,
+        3972,
+        4123,
+        3847,
+        3918,
+        3933,
+        3969,
+        4063,
+        4090
+      ]
+    },
+    {
+      "server_version": "0.2.0+26.3-26.51.arkbug8",
+      "base_commit": "204a94ed895f041a845630d5a23c094705a0704e",
+      "applied_fixes": [
+        3844,
+        3759,
+        4048,
+        3516,
+        4089,
+        3972,
+        4123,
+        3847,
+        3918,
+        3933,
+        3969,
+        4063,
+        4090,
+        3989,
+        3065,
+        3716
+      ],
+      "upstream_included": {},
+      "sha256": "2c9b2ddf3f5e7bd41261cf5b3664cd0ffad23dcf09f0ae7b3e71cafab0f21b9b"
+    },
+    {
+      "server_version": "0.2.0+26.3-26.51.arkbug9",
+      "base_commit": "204a94ed895f041a845630d5a23c094705a0704e",
+      "applied_fixes": [
+        3844,
+        3759,
+        4048,
+        3516,
+        4089,
+        3972,
+        4123,
+        3847,
+        3918,
+        3933,
+        3969,
+        4063,
+        4090,
+        3989,
+        3065,
+        3716,
+        3698,
+        3730
+      ],
+      "upstream_included": {},
+      "sha256": "ef8e642eec16c3ff96cf34168b6a1d8d0e2ae18216dcdb0288021f34af3b1eae"
+    },
+    {
+      "server_version": "0.2.0+26.3-26.51.arkbug11",
+      "base_commit": "204a94ed895f041a845630d5a23c094705a0704e",
+      "applied_fixes": [
+        3844,
+        3759,
+        4048,
+        3516,
+        4089,
+        3972,
+        4123,
+        3847,
+        3918,
+        3933,
+        3969,
+        4063,
+        4090,
+        3989,
+        3065,
+        3716,
+        3698,
+        3730,
+        2016,
+        4045,
+        3902
+      ],
+      "upstream_included": {},
+      "sha256": "7bf1b87c467de6b51f99fb87faf410c6768f9116115cd8bd6767f3262051d38a"
+    },
+    {
+      "server_version": "0.2.0+26.3-26.51.arkbug13",
+      "base_commit": "204a94ed895f041a845630d5a23c094705a0704e",
+      "applied_fixes": [
+        3844,
+        3759,
+        4048,
+        3516,
+        4089,
+        3972,
+        4123,
+        3847,
+        3918,
+        3933,
+        3969,
+        4063,
+        4090,
+        3989,
+        3065,
+        3716,
+        3698,
+        3730,
+        2016,
+        4045,
+        3902,
+        3571,
+        3510,
+        3367
+      ],
+      "upstream_included": {},
+      "sha256": "387fcc7e13f9bfe713be1badf139789afe95e4433bf840ec18a7191fe78f6db8"
+    },
+    {
+      "server_version": "0.2.0+26.3-26.51.arkbug14",
+      "base_commit": "204a94ed895f041a845630d5a23c094705a0704e",
+      "applied_fixes": [
+        3844,
+        3759,
+        4048,
+        3516,
+        4089,
+        3972,
+        4123,
+        3847,
+        3918,
+        3933,
+        3969,
+        4063,
+        4090,
+        3989,
+        3065,
+        3716,
+        3698,
+        3730,
+        2016,
+        4045,
+        3902,
+        3571,
+        3510,
+        3367,
+        3511,
+        3512
+      ],
+      "upstream_included": {},
+      "sha256": "8cd63f31b2f4e14c3072933970fa642725e43d1fff8fe098414d51746add5f18"
+    },
+    {
+      "server_version": "0.2.0+26.3-26.51.arkbug1",
+      "base_commit": "204a94ed895f041a845630d5a23c094705a0704e",
+      "applied_fixes": [
+        3844,
+        3759,
+        4048,
+        3516,
+        4089,
+        3972,
+        4123,
+        3847,
+        3918,
+        3933,
+        3969,
+        4063,
+        4090,
+        3989,
+        3065,
+        3716,
+        3698,
+        3730,
+        2016,
+        4045,
+        3902,
+        3571,
+        3510,
+        3367,
+        3511,
+        3512
+      ],
+      "upstream_included": {},
+      "sha256": "b281fed11dc9fe1088862349f9da0dd563cf5fb149259a26cf4b06d9e5616423"
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+diff --git a/crates/pumpkin/src/entity/projectile/trident.rs b/crates/pumpkin/src/entity/projectile/trident.rs
+index dc8b696..454763b 100644
+--- a/crates/pumpkin/src/entity/projectile/trident.rs
++++ b/crates/pumpkin/src/entity/projectile/trident.rs
+@@ -28,6 +28,7 @@ pub struct TridentEntity {
+     pub life: AtomicU32,
+     pub shake_time: AtomicU8,
+     pub has_hit: AtomicBool,
++    pub dealt_damage: AtomicBool,
+     pub last_block_pos: Arc<std::sync::RwLock<Option<BlockPos>>>,
+ }
+ 
+@@ -49,6 +50,7 @@ impl TridentEntity {
+             life: AtomicU32::new(0),
+             shake_time: AtomicU8::new(0),
+             has_hit: AtomicBool::new(false),
++            dealt_damage: AtomicBool::new(false),
+             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
+         }
+     }
+@@ -74,6 +76,7 @@ impl TridentEntity {
+             life: AtomicU32::new(0),
+             shake_time: AtomicU8::new(0),
+             has_hit: AtomicBool::new(false),
++            dealt_damage: AtomicBool::new(false),
+             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
+         }
+     }
+@@ -131,6 +134,11 @@ impl TridentEntity {
+     }
+ 
+     fn should_skip_collision(&self, self_ent: &Entity, other: &Arc<dyn EntityBase>) -> bool {
++        // Keep block collisions/pickup after impact, but never damage another
++        // entity again during this trident's remaining flight.
++        if self.dealt_damage.load(Ordering::Relaxed) {
++            return true;
++        }
+         let other_ent = other.get_entity();
+ 
+         // Don't collide with self
+@@ -342,6 +350,9 @@ impl EntityBase for TridentEntity {
+                 hit_pos,
+                 ..
+             } => {
++                if self.dealt_damage.swap(true, Ordering::SeqCst) {
++                    return;
++                }
+                 let mut damage = Self::BASE_DAMAGE;
+ 
+                 // Apply Impaling enchantment extra damage
